@@ -19,8 +19,21 @@ export const activityIds = [
 export const activityIdSchema = z.enum(activityIds);
 export const activityKindSchema = z.enum(['check-in', 'test', 'exercise']);
 
+export const skipReasonSchema = z.enum([
+  'pain',
+  'tired',
+  'not-understood',
+  'cannot-see-or-hear',
+  'physically-unable',
+  'device-problem',
+  'other',
+]);
+export const skipStageSchema = z.enum(['instructions', 'practice', 'task']);
+
 export type ActivityId = z.infer<typeof activityIdSchema>;
 export type ActivityKind = z.infer<typeof activityKindSchema>;
+export type SkipReason = z.infer<typeof skipReasonSchema>;
+export type SkipStage = z.infer<typeof skipStageSchema>;
 
 export type ActivityModuleProps<Config, RawResult> = {
   config: Config;

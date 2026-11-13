@@ -9,3 +9,4 @@ export * from './suggestion.ts';
 export * from './metrics.ts';
 export * from './care.ts';
 export * from './api.ts';
+export * from './assistant.ts';

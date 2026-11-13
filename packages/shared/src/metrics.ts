@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { ActivityId } from './activity.ts';
-import { isoDateTimeSchema } from './common.ts';
+import { skipReasonSchema, skipStageSchema, type ActivityId } from './activity.ts';
+import { idSchema, isoDateTimeSchema } from './common.ts';
 import { timelineEventSchema } from './record.ts';
 
 export const metricIds = [
@@ -80,15 +80,29 @@ export const referenceBandSchema = z.object({
   high: z.number(),
 });
 
+export const skipEventSchema = z.object({
+  id: idSchema,
+  t: isoDateTimeSchema,
+  type: z.literal('skip'),
+  label: z.string().min(1),
+  sessionId: idSchema,
+  reason: skipReasonSchema,
+  stage: skipStageSchema,
+});
+
+export const metricEventSchema = z.discriminatedUnion('type', [timelineEventSchema, skipEventSchema]);
+
 export const metricSeriesSchema = z.object({
   metricId: metricIdSchema,
   unit: z.string().min(1),
   points: z.array(metricPointSchema),
   baseline: z.number().nullable(),
   referenceBand: referenceBandSchema.nullable(),
-  events: z.array(timelineEventSchema),
+  events: z.array(metricEventSchema),
 });
 
 export type MetricPoint = z.infer<typeof metricPointSchema>;
 export type ReferenceBand = z.infer<typeof referenceBandSchema>;
+export type SkipEvent = z.infer<typeof skipEventSchema>;
+export type MetricEvent = z.infer<typeof metricEventSchema>;
 export type MetricSeries = z.infer<typeof metricSeriesSchema>;

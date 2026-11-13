@@ -1,8 +1,8 @@
 import type { FingerTappingRawResult, RawResult } from './activity.ts';
 import type { Institution, Patient, Staff } from './entities.ts';
-import type { MetricSeries } from './metrics.ts';
+import type { MetricSeries, SkipEvent } from './metrics.ts';
 import type { MedicalRecord, TimelineEvent } from './record.ts';
-import type { Session, SessionPlan } from './session.ts';
+import type { Session, SessionPlan, SkippedResult } from './session.ts';
 
 export const institution = {
   id: 'inst-1',
@@ -124,6 +124,26 @@ export const fingerTappingResult = {
   data: fingerTappingRaw,
 } satisfies RawResult;
 
+export const painSkip = {
+  status: 'skipped',
+  activityId: 'shoulder-raise',
+  reason: 'pain',
+  stage: 'task',
+  skippedAt: '2026-11-13T10:12:00.000Z',
+  painLocation: 'right-shoulder',
+  partialData: { repetitions: [{ peakAngle: 84 }] },
+} satisfies SkippedResult;
+
+export const tappingSkipEvent = {
+  id: 'evt-skip-1',
+  t: '2026-10-20T10:07:00.000Z',
+  type: 'skip',
+  label: 'Too tired',
+  sessionId: 'sess-0',
+  reason: 'tired',
+  stage: 'practice',
+} satisfies SkipEvent;
+
 export const tapsPerSecondSeries = {
   metricId: 'finger-tapping.taps-per-second',
   unit: 'taps/s',
@@ -133,5 +153,5 @@ export const tapsPerSecondSeries = {
   ],
   baseline: 4.1,
   referenceBand: { low: 4.5, high: 6.5 },
-  events: [levodopaChange],
+  events: [levodopaChange, tappingSkipEvent],
 } satisfies MetricSeries;

@@ -30,6 +30,7 @@ export const fingerTappingSubmission: SubmitSessionRequest = {
   partial: false,
   results: [
     {
+      status: 'completed',
       completedAt: '2026-11-13T12:05:00.000Z',
       raw: {
         activityId: 'finger-tapping',

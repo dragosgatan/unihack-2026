@@ -1,10 +1,15 @@
 import { z } from 'zod';
-import { rawResultSchema } from './activity.ts';
 import { idSchema, isoDateTimeSchema, sideSchema } from './common.ts';
 import { patientSchema, staffSchema } from './entities.ts';
 import { metricIdSchema, metricSeriesSchema } from './metrics.ts';
 import { medicalRecordSchema } from './record.ts';
-import { sessionModeSchema, sessionPlanSchema, sessionSchema, sessionStatusSchema } from './session.ts';
+import {
+  sessionModeSchema,
+  sessionPlanSchema,
+  sessionSchema,
+  sessionStatusSchema,
+  submittedResultSchema,
+} from './session.ts';
 
 export const sessionCodeSchema = z.string().regex(/^\d{6}$/);
 
@@ -53,11 +58,6 @@ export const deviceSessionCodeResponseSchema = z.object({
   session: sessionSchema,
   plan: sessionPlanSchema,
   patientFirstName: z.string().min(1),
-});
-
-export const submittedResultSchema = z.object({
-  raw: rawResultSchema,
-  completedAt: isoDateTimeSchema,
 });
 
 export const submitSessionRequestSchema = z.object({
@@ -175,7 +175,6 @@ export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>;
 export type CreateSessionResponse = z.infer<typeof createSessionResponseSchema>;
 export type DeviceSessionCodeRequest = z.infer<typeof deviceSessionCodeRequestSchema>;
 export type DeviceSessionCodeResponse = z.infer<typeof deviceSessionCodeResponseSchema>;
-export type SubmittedResult = z.infer<typeof submittedResultSchema>;
 export type SubmitSessionRequest = z.infer<typeof submitSessionRequestSchema>;
 export type SubmitSessionResponse = z.infer<typeof submitSessionResponseSchema>;
 export type PatientMetric = z.infer<typeof patientMetricSchema>;

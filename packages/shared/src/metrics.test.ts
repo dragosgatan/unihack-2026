@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activityIdSchema } from './activity.ts';
-import { metricDefinitions, metricIdSchema, metricIds, metricSeriesSchema } from './metrics.ts';
-import { tapsPerSecondSeries } from './test-fixtures.ts';
+import { metricDefinitions, metricIdSchema, metricIds, metricSeriesSchema, skipEventSchema } from './metrics.ts';
+import { levodopaChange, tappingSkipEvent, tapsPerSecondSeries } from './test-fixtures.ts';
 
 describe('metricIdSchema', () => {
   it('accepts a dotted metric id', () => {
@@ -19,13 +19,29 @@ describe('metricDefinitions', () => {
   });
 });
 
+describe('skipEventSchema', () => {
+  it('accepts a skip with its session, reason and stage', () => {
+    expect(skipEventSchema.safeParse(tappingSkipEvent).success).toBe(true);
+  });
+
+  it('rejects a timeline event', () => {
+    expect(skipEventSchema.safeParse(levodopaChange).success).toBe(false);
+  });
+});
+
 describe('metricSeriesSchema', () => {
-  it('accepts a series with baseline, band and events', () => {
+  it('accepts a series with baseline, band, timeline and skip events', () => {
     expect(metricSeriesSchema.safeParse(tapsPerSecondSeries).success).toBe(true);
   });
 
   it('accepts a series with no baseline or band yet', () => {
     const series = { ...tapsPerSecondSeries, baseline: null, referenceBand: null, events: [] };
     expect(metricSeriesSchema.safeParse(series).success).toBe(true);
+  });
+
+  it('rejects a skip event without a reason', () => {
+    const { id, t, type, label, sessionId, stage } = tappingSkipEvent;
+    const series = { ...tapsPerSecondSeries, events: [{ id, t, type, label, sessionId, stage }] };
+    expect(metricSeriesSchema.safeParse(series).success).toBe(false);
   });
 });

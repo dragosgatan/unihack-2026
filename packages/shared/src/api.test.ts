@@ -23,6 +23,7 @@ import {
   attending,
   fingerTappingResult,
   medicalRecord,
+  painSkip,
   patient,
   session,
   sessionPlan,
@@ -108,8 +109,9 @@ describe('POST /api/device/session-code', () => {
 });
 
 describe('POST /api/sessions/:sessionId/submit', () => {
-  it('takes raw results', () => {
-    const body = { partial: false, results: [{ raw: fingerTappingResult, completedAt: '2026-11-13T10:05:00.000Z' }] };
+  it('takes completed and skipped results', () => {
+    const completed = { status: 'completed', raw: fingerTappingResult, completedAt: '2026-11-13T10:05:00.000Z' };
+    const body = { partial: false, results: [completed, painSkip] };
     expect(submitSessionRequestSchema.safeParse(body).success).toBe(true);
   });
 
