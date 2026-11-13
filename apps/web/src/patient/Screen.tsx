@@ -8,10 +8,11 @@ type ScreenProps = {
   language: Language;
   action: ReactNode;
   secondary?: ReactNode;
+  spoken?: string;
 };
 
-export function Screen({ title, text, language, action, secondary }: ScreenProps) {
-  useSpoken(`${title} ${text}`, language);
+export function Screen({ title, text, language, action, secondary, spoken = `${title} ${text}` }: ScreenProps) {
+  useSpoken(spoken, language);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 p-6 text-[20pt]">

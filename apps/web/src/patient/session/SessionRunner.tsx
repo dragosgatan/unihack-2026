@@ -4,14 +4,18 @@ import { activityModules } from '../activities/index.ts';
 import { Placeholder } from '../activities/placeholder/Placeholder.tsx';
 import { Screen } from '../Screen.tsx';
 import { TapButton } from '../TapButton.tsx';
+import { CannotDo } from './CannotDo.tsx';
 import { CodeEntry } from './CodeEntry.tsx';
 import {
+  cannotDo,
   completeActivity,
   completedResult,
   isFinished,
   restoreRunner,
+  skipActivity,
   startRunner,
   submission,
+  type ActivityProgress,
   type RunnerState,
   type Stage,
 } from './runner.ts';
@@ -24,6 +28,7 @@ export function SessionRunner() {
   const [state, setState] = useState<RunnerState>();
   const [finished, setFinished] = useState<{ name: string; language: Language }>();
   const completedKey = useRef('');
+  const progress = useRef<{ key: string; value: ActivityProgress }>(undefined);
 
   useEffect(() => {
     loadRunner()
@@ -107,12 +112,36 @@ export function SessionRunner() {
     );
   }
 
+  if (state.stage === 'cannot-do') {
+    return <CannotDo language={language} onAnswer={(answer) => setState(skipActivity(state, answer, new Date()))} />;
+  }
+
+  if (state.stage === 'skipped') {
+    const done = isFinished(state);
+    return (
+      <Screen
+        title="That's fine"
+        text="We'll let your therapist know."
+        language={language}
+        action={<TapButton onTap={() => (done ? finish(state) : go('activity'))}>Continue</TapButton>}
+        secondary={
+          !done && (
+            <TapButton variant="secondary" onTap={() => go('paused')}>
+              Take a break
+            </TapButton>
+          )
+        }
+      />
+    );
+  }
+
   const index = state.index;
   const item = state.plan.items[index];
   if (!item) return null;
 
+  const key = `${state.session.id}:${index}`;
+
   const onComplete = (data: unknown) => {
-    const key = `${state.session.id}:${index}`;
     if (completedKey.current === key) return;
     completedKey.current = key;
     const result = completedResult(item.activityId, data, new Date());
@@ -122,10 +151,32 @@ export function SessionRunner() {
     else setState(next);
   };
 
+  const onProgress = (value: ActivityProgress) => {
+    progress.current = { key, value };
+  };
+
+  const onCannotDo = () => {
+    if (completedKey.current === key) return;
+    completedKey.current = key;
+    setState(cannotDo(state, progress.current?.key === key ? progress.current.value : { stage: 'instructions' }));
+  };
+
   const Module = activityModules[item.activityId];
-  return Module ? (
-    <Module key={index} config={item.config} language={language} onComplete={onComplete} />
-  ) : (
-    <Placeholder key={index} config={{ activityId: item.activityId }} language={language} onComplete={onComplete} />
+  const props = { language, onComplete, onProgress };
+  return (
+    <>
+      {Module ? (
+        <Module key={key} {...props} config={item.config} />
+      ) : (
+        <Placeholder key={key} {...props} config={{ activityId: item.activityId }} />
+      )}
+      {item.kind !== 'check-in' && (
+        <div className="pointer-events-none fixed inset-x-0 top-0 mx-auto flex max-w-2xl p-6">
+          <TapButton variant="secondary" className="pointer-events-auto" onTap={onCannotDo}>
+            I can't do this
+          </TapButton>
+        </div>
+      )}
+    </>
   );
 }

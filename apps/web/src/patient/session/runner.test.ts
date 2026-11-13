@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { DeviceSessionCodeResponse } from '@tempo/shared';
+import { skippedResultSchema, skipStageSchema, type DeviceSessionCodeResponse } from '@tempo/shared';
 import {
+  cannotDo,
   completeActivity,
   completedResult,
   isFinished,
   restoreRunner,
   runnerStateSchema,
   startRunner,
+  skipActivity,
   submission,
 } from './runner.ts';
 
@@ -74,5 +76,35 @@ describe('session runner', () => {
   it('rejects stored state that no longer matches the schema', () => {
     expect(runnerStateSchema.safeParse(startRunner(redeemed)).success).toBe(true);
     expect(runnerStateSchema.safeParse({ ...startRunner(redeemed), stage: 'gone' }).success).toBe(false);
+  });
+
+  it.each(skipStageSchema.options)('saves a valid skipped result when stopped at the %s stage', (stage) => {
+    const partialData = { taps: [{ t: 120 }] };
+    const asked = cannotDo({ ...startRunner(redeemed), stage: 'activity' }, { stage, partialData });
+    expect(restoreRunner(asked).stage).toBe('cannot-do');
+    const skipped = skipActivity(asked, { reason: 'pain', painLocation: 'right-shoulder' }, new Date(at));
+    expect(skipped).toMatchObject({ stage: 'skipped', index: 1 });
+    expect(skipped).not.toHaveProperty('pendingSkip');
+    const [result] = skipped.results;
+    expect(skippedResultSchema.parse(result)).toEqual({
+      status: 'skipped',
+      activityId: 'finger-tapping',
+      reason: 'pain',
+      stage,
+      painLocation: 'right-shoulder',
+      partialData,
+      skippedAt: at,
+    });
+  });
+
+  it('submits a session with skips as finished, keeping completed and skipped results in order', () => {
+    const result = completedResult('finger-tapping', tappingData, new Date(at));
+    const first = completeActivity(startRunner(redeemed), result);
+    const done = skipActivity(cannotDo(first, { stage: 'practice' }), { reason: 'tired' }, new Date(at));
+    expect(isFinished(done)).toBe(true);
+    expect(submission(done)).toMatchObject({
+      partial: false,
+      results: [result, { status: 'skipped', activityId: 'trail-making-a', reason: 'tired', stage: 'practice' }],
+    });
   });
 });

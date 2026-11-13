@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { Language } from '@tempo/shared';
 
-const voices: Record<Language, string> = { en: 'en-GB', ro: 'ro-RO' };
+export const voices: Record<Language, string> = { en: 'en-GB', ro: 'ro-RO' };
 const hasSpeech = () => typeof speechSynthesis !== 'undefined';
 
 let audio: AudioContext | undefined;
@@ -10,6 +10,7 @@ let speechUnlocked = false;
 export function speak(text: string, language: Language) {
   if (!hasSpeech()) return;
   speechSynthesis.cancel();
+  if (!text) return;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = voices[language];
   speechSynthesis.speak(utterance);
