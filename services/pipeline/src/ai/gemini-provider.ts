@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { AiPart, AiProvider, AiRequest } from './provider.ts';
 
 export const geminiModel = 'gemini-3.8-flash';
+export const geminiFallbackModel = 'gemini-3.5-flash';
+const busyStatuses = new Set([429, 503]);
 export const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 export const geminiApiRevision = '2026-05-20';
 export const geminiTimeoutMs = 60_000;
@@ -44,8 +46,8 @@ const stripUnsupported = (node: unknown): unknown => {
   );
 };
 
-export const geminiRequestBody = ({ system, parts, responseSchema }: AiRequest) => ({
-  model: geminiModel,
+export const geminiRequestBody = ({ system, parts, responseSchema }: AiRequest, model: string = geminiModel) => ({
+  model,
   system_instruction: system,
   input: parts.map(toContent),
   response_format: {
@@ -90,16 +92,20 @@ export type GeminiProviderOptions = {
 export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: GeminiProviderOptions): AiProvider => ({
   name: 'gemini',
   generate: async (request) => {
-    const response = await fetchImpl(geminiEndpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': await apiKey(),
-        'api-revision': geminiApiRevision,
-      },
-      body: JSON.stringify(geminiRequestBody(request)),
-      signal: AbortSignal.timeout(geminiTimeoutMs),
-    });
+    const key = await apiKey();
+    const send = (model: string): Promise<Response> =>
+      fetchImpl(geminiEndpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': key,
+          'api-revision': geminiApiRevision,
+        },
+        body: JSON.stringify(geminiRequestBody(request, model)),
+        signal: AbortSignal.timeout(geminiTimeoutMs),
+      });
+    const first = await send(geminiModel);
+    const response = busyStatuses.has(first.status) ? await send(geminiFallbackModel) : first;
     if (!response.ok) throw new GeminiRequestError(`Gemini request for ${request.task} failed`, response.status);
     const interaction = interactionSchema.safeParse(await response.json());
     if (!interaction.success) throw new GeminiRequestError(`Gemini response for ${request.task} has an unknown shape`);

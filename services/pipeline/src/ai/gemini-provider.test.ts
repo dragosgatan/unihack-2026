@@ -6,6 +6,7 @@ import {
   createGeminiProvider,
   geminiApiRevision,
   geminiEndpoint,
+  geminiFallbackModel,
   geminiModel,
   geminiTimeoutMs,
 } from './gemini-provider.ts';
@@ -118,6 +119,15 @@ describe('Gemini provider', () => {
     const { fetchImpl } = fakeFetch(() => json(interaction('not json')));
     const provider = createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl });
     expect((await provider.generate(request)).data).toBeUndefined();
+  });
+
+  it('asks the fallback model once when the first one is busy', async () => {
+    const responses = [json({ error: { code: 'service_unavailable' } }, 503), json(interaction('{"transcript":"","words":[]}'))];
+    const { fetchImpl, calls } = fakeFetch(() => responses.shift() ?? json({}, 500));
+    const provider = createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl });
+    await provider.generate(request);
+    const models = calls.map((call) => (JSON.parse(String(call.init.body)) as { model: string }).model);
+    expect(models).toEqual([geminiModel, geminiFallbackModel]);
   });
 
   it('reports HTTP failures with the status only, never the key', async () => {
