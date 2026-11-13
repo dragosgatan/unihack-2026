@@ -1,0 +1,229 @@
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+
+  --ui-grouped: #f2f2f7;
+  --ui-surface: #ffffff;
+  --ui-surface-elevated: #ffffff;
+  --ui-fill: rgb(118 118 128 / 0.12);
+  --ui-separator: rgb(60 60 67 / 0.29);
+  --ui-segment-selected: #ffffff;
+
+  --ui-label: #000000;
+  --ui-label-secondary: #6c6c70;
+  --ui-label-tertiary: rgb(60 60 67 / 0.3);
+
+  --ui-accent: #077296;
+  --ui-accent-pressed: #055d7a;
+  --ui-accent-soft: rgb(7 114 150 / 0.12);
+  --ui-on-accent: #ffffff;
+
+  --ui-positive: #1f7a35;
+  --ui-positive-soft: rgb(52 199 89 / 0.12);
+  --ui-warning: #c93400;
+  --ui-warning-soft: rgb(255 149 0 / 0.16);
+  --ui-critical: #d70015;
+  --ui-critical-soft: rgb(255 59 48 / 0.12);
+
+  --ui-cat-memory: #af52de;
+  --ui-cat-attention: #ff9500;
+  --ui-cat-executive: #5856d6;
+  --ui-cat-motor: #34c759;
+  --ui-cat-language: #ff2d55;
+  --ui-cat-mobility: #a2845e;
+
+  --ui-bar: rgb(249 249 249 / 0.78);
+  --ui-bar-solid: #f9f9f9;
+
+  --ui-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.03);
+  --ui-shadow-sheet: 0 -2px 10px rgb(0 0 0 / 0.06), 0 -12px 40px rgb(0 0 0 / 0.12);
+
+  --duration-press: 120ms;
+  --duration-fast: 180ms;
+  --duration-base: 240ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ui-grouped: #000000;
+    --ui-surface: #1c1c1e;
+    --ui-surface-elevated: #2c2c2e;
+    --ui-fill: rgb(118 118 128 / 0.24);
+    --ui-separator: rgb(84 84 88 / 0.6);
+    --ui-segment-selected: #636366;
+
+    --ui-label: #ffffff;
+    --ui-label-secondary: #a1a1a8;
+    --ui-label-tertiary: rgb(235 235 245 / 0.3);
+
+    --ui-accent: #4fc3e0;
+    --ui-accent-pressed: #3cb3d1;
+    --ui-accent-soft: rgb(79 195 224 / 0.18);
+    --ui-on-accent: #062f3b;
+
+    --ui-positive: #30d158;
+    --ui-positive-soft: rgb(48 209 88 / 0.18);
+    --ui-warning: #ff9f0a;
+    --ui-warning-soft: rgb(255 159 10 / 0.18);
+    --ui-critical: #ff6961;
+    --ui-critical-soft: rgb(255 69 58 / 0.2);
+
+    --ui-cat-memory: #bf5af2;
+    --ui-cat-attention: #ff9f0a;
+    --ui-cat-executive: #5e5ce6;
+    --ui-cat-motor: #30d158;
+    --ui-cat-language: #ff375f;
+    --ui-cat-mobility: #ac8e68;
+
+    --ui-bar: rgb(28 28 30 / 0.78);
+    --ui-bar-solid: #1c1c1e;
+
+    --ui-shadow-card: 0 0 #0000;
+    --ui-shadow-sheet: 0 -2px 10px rgb(0 0 0 / 0.3), 0 -12px 40px rgb(0 0 0 / 0.5);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --ui-bar: var(--ui-bar-solid);
+  }
+}
+
+@theme inline {
+  --color-grouped: var(--ui-grouped);
+  --color-surface: var(--ui-surface);
+  --color-surface-elevated: var(--ui-surface-elevated);
+  --color-fill: var(--ui-fill);
+  --color-separator: var(--ui-separator);
+  --color-segment-selected: var(--ui-segment-selected);
+
+  --color-label: var(--ui-label);
+  --color-label-secondary: var(--ui-label-secondary);
+  --color-label-tertiary: var(--ui-label-tertiary);
+
+  --color-accent: var(--ui-accent);
+  --color-accent-pressed: var(--ui-accent-pressed);
+  --color-accent-soft: var(--ui-accent-soft);
+  --color-on-accent: var(--ui-on-accent);
+
+  --color-positive: var(--ui-positive);
+  --color-positive-soft: var(--ui-positive-soft);
+  --color-warning: var(--ui-warning);
+  --color-warning-soft: var(--ui-warning-soft);
+  --color-critical: var(--ui-critical);
+  --color-critical-soft: var(--ui-critical-soft);
+
+  --color-cat-memory: var(--ui-cat-memory);
+  --color-cat-attention: var(--ui-cat-attention);
+  --color-cat-executive: var(--ui-cat-executive);
+  --color-cat-motor: var(--ui-cat-motor);
+  --color-cat-language: var(--ui-cat-language);
+  --color-cat-mobility: var(--ui-cat-mobility);
+
+  --color-bar: var(--ui-bar);
+  --color-bar-solid: var(--ui-bar-solid);
+
+  --shadow-card: var(--ui-shadow-card);
+  --shadow-sheet: var(--ui-shadow-sheet);
+}
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, system-ui, 'Inter', 'Segoe UI', Roboto, sans-serif;
+
+  --text-large-title: 2.125rem;
+  --text-large-title--line-height: 2.5625rem;
+  --text-large-title--letter-spacing: -0.022em;
+  --text-large-title--font-weight: 700;
+  --text-title-1: 1.75rem;
+  --text-title-1--line-height: 2.125rem;
+  --text-title-1--letter-spacing: -0.02em;
+  --text-title-2: 1.375rem;
+  --text-title-2--line-height: 1.75rem;
+  --text-title-2--letter-spacing: -0.016em;
+  --text-title-3: 1.25rem;
+  --text-title-3--line-height: 1.5625rem;
+  --text-title-3--letter-spacing: -0.012em;
+  --text-headline: 1.0625rem;
+  --text-headline--line-height: 1.375rem;
+  --text-headline--letter-spacing: -0.008em;
+  --text-headline--font-weight: 600;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.375rem;
+  --text-body--letter-spacing: -0.004em;
+  --text-callout: 1rem;
+  --text-callout--line-height: 1.3125rem;
+  --text-callout--letter-spacing: -0.002em;
+  --text-subhead: 0.9375rem;
+  --text-subhead--line-height: 1.25rem;
+  --text-subhead--letter-spacing: 0em;
+  --text-footnote: 0.8125rem;
+  --text-footnote--line-height: 1.125rem;
+  --text-footnote--letter-spacing: 0.004em;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--letter-spacing: 0.01em;
+
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+  --radius-sheet: 1.25rem;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@utility pressable {
+  transition: transform var(--duration-press) var(--ease-out);
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled) {
+      transform: none;
+      opacity: 0.7;
+    }
+  }
+}
+
+@utility material-bar {
+  background-color: var(--ui-bar);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+
+  @media (prefers-reduced-transparency: reduce) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--ui-grouped);
+    color: var(--ui-label);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    letter-spacing: var(--text-body--letter-spacing);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-property: opacity, color, background-color, border-color, fill, stroke !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
