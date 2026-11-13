@@ -26,7 +26,13 @@ export const metricSeriesParamsSchema = z.object({ patientId: idSchema, metricId
 
 export const meResponseSchema = staffSchema;
 
-export const patientSummarySchema = patientSchema.pick({ id: true, name: true, profile: true, dateOfBirth: true });
+export const patientSummarySchema = patientSchema.pick({
+  id: true,
+  name: true,
+  profile: true,
+  dateOfBirth: true,
+  sex: true,
+});
 
 export const patientListResponseSchema = z.object({
   patients: z.array(patientSummarySchema),

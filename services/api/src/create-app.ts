@@ -100,11 +100,12 @@ export const createApp = ({
   staffRoute(routes.me, async ({ staff }) => staff);
 
   staffRoute(routes.listPatients, async ({ staff }) => ({
-    patients: (await visiblePatients(store, staff)).map(({ id, name, profile, dateOfBirth }) => ({
+    patients: (await visiblePatients(store, staff)).map(({ id, name, profile, dateOfBirth, sex }) => ({
       id,
       name,
       profile,
       dateOfBirth,
+      sex,
     })),
   }));
 

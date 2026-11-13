@@ -73,8 +73,10 @@ describe('GET /api/me', () => {
 
 describe('GET /api/patients', () => {
   it('returns patient summaries', () => {
-    const { id, name, profile, dateOfBirth } = patient;
-    expect(patientListResponseSchema.safeParse({ patients: [{ id, name, profile, dateOfBirth }] }).success).toBe(true);
+    const { id, name, profile, dateOfBirth, sex } = patient;
+    const summary = { id, name, profile, dateOfBirth, sex };
+    expect(patientListResponseSchema.safeParse({ patients: [summary] }).success).toBe(true);
+    expect(patientListResponseSchema.safeParse({ patients: [{ id, name, profile, dateOfBirth }] }).success).toBe(false);
   });
 });
 
