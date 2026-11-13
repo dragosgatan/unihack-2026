@@ -4,8 +4,10 @@ import { Button } from './Button.tsx';
 import { Card } from './Card.tsx';
 import { EmptyState } from './EmptyState.tsx';
 import { GroupedList, GroupedListRow, type RowTint } from './GroupedList.tsx';
+import { NavShowcase } from './NavShowcase.tsx';
 import { SegmentedControl } from './SegmentedControl.tsx';
 import { Select } from './Select.tsx';
+import { SheetShowcase } from './SheetShowcase.tsx';
 import { TextArea } from './TextArea.tsx';
 import { TextField } from './TextField.tsx';
 import { Toggle } from './Toggle.tsx';
@@ -202,6 +204,10 @@ export function Showcase() {
             <p className="mt-3 text-subhead text-label-secondary">Selected: {range}</p>
           </Card>
         </Section>
+
+        <SheetShowcase />
+
+        <NavShowcase />
 
         <Section title="Colours">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
