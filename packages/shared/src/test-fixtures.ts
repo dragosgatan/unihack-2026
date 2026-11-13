@@ -1,5 +1,5 @@
 import type { FingerTappingRawResult, RawResult } from './activity.ts';
-import type { Institution, Patient, Staff } from './entities.ts';
+import type { Institution, PairedDevice, Patient, Staff } from './entities.ts';
 import type { MetricSeries, SkipEvent } from './metrics.ts';
 import type { MedicalRecord, TimelineEvent } from './record.ts';
 import type { Session, SessionPlan, SkippedResult } from './session.ts';
@@ -155,3 +155,10 @@ export const tapsPerSecondSeries = {
   referenceBand: { low: 4.5, high: 6.5 },
   events: [levodopaChange, tappingSkipEvent],
 } satisfies MetricSeries;
+
+export const pairedDevice = {
+  id: 'dev-1',
+  patientId: patient.id,
+  label: "Elena's phone",
+  pairedAt: '2026-11-13T10:30:00.000Z',
+} satisfies PairedDevice;

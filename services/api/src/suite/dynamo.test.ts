@@ -1,0 +1,23 @@
+import { describe, it, vi } from 'vitest';
+import { accessSuite } from './access.ts';
+import { contractSuite } from './contract.ts';
+import { dynamoHarness } from './harness.ts';
+import { pairingSuite } from './pairing.ts';
+import { sessionFlowSuite } from './session-flow.ts';
+
+const tableName = process.env['TEMPO_TEST_TABLE'];
+
+if (tableName) {
+  const harness = dynamoHarness(tableName);
+  vi.setConfig({ hookTimeout: 120_000, testTimeout: 120_000 });
+  describe('DynamoDB store', () => {
+    describe('contract', () => contractSuite(harness));
+    describe('access', () => accessSuite(harness));
+    describe('sessions', () => sessionFlowSuite(harness));
+    describe('pairing', () => pairingSuite(harness));
+  });
+} else {
+  describe('DynamoDB store', () => {
+    it.skip('runs when TEMPO_TEST_TABLE names a table', () => {});
+  });
+}

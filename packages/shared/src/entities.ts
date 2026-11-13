@@ -57,9 +57,19 @@ export const auditEntrySchema = z.object({
   at: isoDateTimeSchema,
 });
 
+export const pairedDeviceSchema = z.object({
+  id: idSchema,
+  patientId: idSchema,
+  label: z.string().min(1).max(100).optional(),
+  pairedAt: isoDateTimeSchema,
+  revokedAt: isoDateTimeSchema.optional(),
+  revokedBy: idSchema.optional(),
+});
+
 export type Institution = z.infer<typeof institutionSchema>;
 export type Staff = z.infer<typeof staffSchema>;
 export type Sex = z.infer<typeof sexSchema>;
 export type Patient = z.infer<typeof patientSchema>;
 export type AuditEntityType = z.infer<typeof auditEntityTypeSchema>;
 export type AuditEntry = z.infer<typeof auditEntrySchema>;
+export type PairedDevice = z.infer<typeof pairedDeviceSchema>;

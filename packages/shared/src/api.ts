@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { idSchema, isoDateTimeSchema, sideSchema } from './common.ts';
-import { patientSchema, staffSchema } from './entities.ts';
+import { idSchema, isoDateTimeSchema, languageSchema, sideSchema } from './common.ts';
+import { pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
 import { metricIdSchema, metricSeriesSchema } from './metrics.ts';
 import { medicalRecordSchema } from './record.ts';
 import {
@@ -91,6 +91,39 @@ export const metricSeriesQuerySchema = z.object({
 
 export const metricSeriesResponseSchema = metricSeriesSchema;
 
+export const deviceParamsSchema = z.object({ patientId: idSchema, deviceId: idSchema });
+
+export const createPairingCodeResponseSchema = z.object({
+  code: sessionCodeSchema,
+  expiresAt: isoDateTimeSchema,
+});
+
+export const devicePairingCodeRequestSchema = z.object({
+  code: sessionCodeSchema,
+  label: pairedDeviceSchema.shape.label,
+});
+
+export const devicePairingCodeResponseSchema = z.object({
+  token: z.string().min(1),
+  expiresAt: isoDateTimeSchema,
+  deviceId: idSchema,
+  patientFirstName: z.string().min(1),
+  language: languageSchema,
+});
+
+export const deviceListResponseSchema = z.object({
+  devices: z.array(pairedDeviceSchema),
+});
+
+export const revokeDeviceResponseSchema = z.object({
+  device: pairedDeviceSchema,
+});
+
+export const startHomeSessionResponseSchema = z.object({
+  session: sessionSchema,
+  plan: sessionPlanSchema,
+});
+
 export type RouteDefinition = {
   method: 'GET' | 'POST';
   path: string;
@@ -159,6 +192,40 @@ export const routes = {
     query: metricSeriesQuerySchema,
     response: metricSeriesResponseSchema,
   },
+  createPairingCode: {
+    method: 'POST',
+    path: '/api/patients/:patientId/pairing-codes',
+    auth: 'staff',
+    params: patientParamsSchema,
+    response: createPairingCodeResponseSchema,
+  },
+  redeemPairingCode: {
+    method: 'POST',
+    path: '/api/device/pairing-code',
+    auth: 'none',
+    body: devicePairingCodeRequestSchema,
+    response: devicePairingCodeResponseSchema,
+  },
+  listDevices: {
+    method: 'GET',
+    path: '/api/patients/:patientId/devices',
+    auth: 'staff',
+    params: patientParamsSchema,
+    response: deviceListResponseSchema,
+  },
+  revokeDevice: {
+    method: 'POST',
+    path: '/api/patients/:patientId/devices/:deviceId/revoke',
+    auth: 'staff',
+    params: deviceParamsSchema,
+    response: revokeDeviceResponseSchema,
+  },
+  startHomeSession: {
+    method: 'POST',
+    path: '/api/device/sessions',
+    auth: 'device',
+    response: startHomeSessionResponseSchema,
+  },
 } as const satisfies Record<string, RouteDefinition>;
 
 export type RouteName = keyof typeof routes;
@@ -182,3 +249,10 @@ export type PatientMetricsResponse = z.infer<typeof patientMetricsResponseSchema
 export type MetricRange = z.infer<typeof metricRangeSchema>;
 export type MetricSeriesQuery = z.infer<typeof metricSeriesQuerySchema>;
 export type MetricSeriesResponse = z.infer<typeof metricSeriesResponseSchema>;
+export type DeviceParams = z.infer<typeof deviceParamsSchema>;
+export type CreatePairingCodeResponse = z.infer<typeof createPairingCodeResponseSchema>;
+export type DevicePairingCodeRequest = z.infer<typeof devicePairingCodeRequestSchema>;
+export type DevicePairingCodeResponse = z.infer<typeof devicePairingCodeResponseSchema>;
+export type DeviceListResponse = z.infer<typeof deviceListResponseSchema>;
+export type RevokeDeviceResponse = z.infer<typeof revokeDeviceResponseSchema>;
+export type StartHomeSessionResponse = z.infer<typeof startHomeSessionResponseSchema>;

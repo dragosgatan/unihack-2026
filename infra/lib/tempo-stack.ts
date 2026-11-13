@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
-import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { BlockPublicAccess, Bucket, HttpMethods } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { Api } from './api.ts';
@@ -33,7 +33,14 @@ export class TempoStack extends Stack {
       partitionKey: { name: 'pk', type: AttributeType.STRING },
       sortKey: { name: 'sk', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'ttl',
       removalPolicy: RemovalPolicy.DESTROY,
+    });
+    table.addGlobalSecondaryIndex({
+      indexName: 'gsi1',
+      partitionKey: { name: 'gsi1pk', type: AttributeType.STRING },
+      sortKey: { name: 'gsi1sk', type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL,
     });
 
     const uploads = new Bucket(this, 'Uploads', {

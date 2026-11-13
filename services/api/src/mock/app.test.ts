@@ -1,0 +1,59 @@
+import { describe, expect, it } from 'vitest';
+import { routes } from '@tempo/shared';
+import { call, expectError } from '../suite/harness.ts';
+import { demoSessionCodes } from './seed/build.ts';
+import { buildTestApp, fingerTappingSubmission } from './testing.ts';
+
+const redeem = async (app: ReturnType<typeof buildTestApp>, code: string) => {
+  const result = await call(app, '/api/device/session-code', { method: 'POST', body: { code } });
+  expect(result.status).toBe(200);
+  return routes.redeemSessionCode.response.parse(result.body);
+};
+
+describe('mock demo session codes', () => {
+  it('lets a demo code start a fresh session every time', async () => {
+    const app = buildTestApp();
+    const first = await redeem(app, '111111');
+    const second = await redeem(app, '111111');
+    expect(first.session.id).not.toBe(second.session.id);
+    expect(first.session.patientId).toBe('pat-1');
+    expect(first.session).toMatchObject({ mode: 'kiosk', status: 'in-progress' });
+    expect(first.patientFirstName).toBe('Elena');
+    expect(first.plan.language).toBe('ro');
+    expect((await redeem(app, '333333')).session.patientId).toBe('pat-3');
+  });
+
+  it('gives each demo session its own token', async () => {
+    const app = buildTestApp();
+    const first = await redeem(app, '222222');
+    const second = await redeem(app, '222222');
+    const body = fingerTappingSubmission;
+    expectError(
+      await call(app, `/api/sessions/${first.session.id}/submit`, { method: 'POST', token: second.token, body }),
+      403,
+      'forbidden',
+    );
+    const submitted = await call(app, `/api/sessions/${first.session.id}/submit`, {
+      method: 'POST',
+      token: first.token,
+      body,
+    });
+    expect(submitted.status).toBe(200);
+  });
+
+  it('never hands out a demo code for a new session', async () => {
+    const app = buildTestApp();
+    const created = await call(app, '/api/patients/pat-2/sessions', { method: 'POST', body: { mode: 'kiosk' } });
+    const { code } = routes.createSession.response.parse(created.body);
+    expect([...demoSessionCodes.keys()]).not.toContain(code);
+  });
+
+  it('does not accept a demo code as a pairing code', async () => {
+    const app = buildTestApp();
+    expectError(
+      await call(app, '/api/device/pairing-code', { method: 'POST', body: { code: '111111' } }),
+      400,
+      'code_invalid',
+    );
+  });
+});

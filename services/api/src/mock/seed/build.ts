@@ -1,6 +1,6 @@
 import type { Institution, MedicalRecord, Patient, Session, SessionPlan, Staff } from '@tempo/shared';
 import { aclPatientId, buildAclPatient } from './acl.ts';
-import type { MetricValue } from './history.ts';
+import type { MetricValue } from '../../store/types.ts';
 import { admin, attending, institution, therapist } from './institution.ts';
 import { buildParkinsonsPatient, parkinsonsPatientId } from './parkinsons.ts';
 import { buildStrokePatient, strokePatientId } from './stroke.ts';

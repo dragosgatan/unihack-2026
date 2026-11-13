@@ -6,6 +6,7 @@ import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import type { IBucket } from 'aws-cdk-lib/aws-s3';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface ApiProps {
@@ -28,6 +29,11 @@ export class Api extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    const deviceTokenSecret = new Secret(this, 'DeviceTokenSecret', {
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     const handler = new Function(this, 'Handler', {
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
@@ -41,8 +47,10 @@ export class Api extends Construct {
         UPLOADS_BUCKET: props.uploads.bucketName,
         USER_POOL_ID: props.userPool.userPoolId,
         USER_POOL_CLIENT_ID: props.userPoolClient.userPoolClientId,
+        DEVICE_TOKEN_SECRET_ARN: deviceTokenSecret.secretArn,
       },
     });
+    deviceTokenSecret.grantRead(handler);
     props.table.grantReadWriteData(handler);
     props.uploads.grantReadWrite(handler);
 

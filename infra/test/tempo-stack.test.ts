@@ -43,7 +43,7 @@ describe('TempoStack', () => {
     template = synth();
   });
 
-  it('creates an on-demand single table keyed by pk and sk', () => {
+  it('creates an on-demand single table keyed by pk and sk with one index and a ttl', () => {
     template.resourceCountIs('AWS::DynamoDB::Table', 1);
     template.hasResourceProperties('AWS::DynamoDB::Table', {
       BillingMode: 'PAY_PER_REQUEST',
@@ -51,7 +51,42 @@ describe('TempoStack', () => {
         { AttributeName: 'pk', KeyType: 'HASH' },
         { AttributeName: 'sk', KeyType: 'RANGE' },
       ],
-      GlobalSecondaryIndexes: Match.absent(),
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'gsi1',
+          KeySchema: [
+            { AttributeName: 'gsi1pk', KeyType: 'HASH' },
+            { AttributeName: 'gsi1sk', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
+      ],
+      AttributeDefinitions: Match.arrayWith([
+        { AttributeName: 'gsi1pk', AttributeType: 'S' },
+        { AttributeName: 'gsi1sk', AttributeType: 'S' },
+      ]),
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    });
+  });
+
+  it('generates the device token secret, deletes it with the stack and lets only the API read it', () => {
+    template.resourceCountIs('AWS::SecretsManager::Secret', 1);
+    template.hasResource('AWS::SecretsManager::Secret', {
+      DeletionPolicy: 'Delete',
+      Properties: {
+        GenerateSecretString: { PasswordLength: 64, ExcludePunctuation: true },
+      },
+    });
+    const [secretId] = Object.keys(template.findResources('AWS::SecretsManager::Secret'));
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+            Resource: { Ref: secretId },
+          }),
+        ]),
+      },
     });
   });
 
@@ -65,7 +100,7 @@ describe('TempoStack', () => {
     }
     template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
       GenerateSecret: false,
-      ExplicitAuthFlows: Match.arrayWith(['ALLOW_USER_SRP_AUTH']),
+      ExplicitAuthFlows: Match.arrayWith(['ALLOW_ADMIN_USER_PASSWORD_AUTH', 'ALLOW_USER_SRP_AUTH']),
     });
   });
 
@@ -143,6 +178,7 @@ describe('TempoStack', () => {
           UPLOADS_BUCKET: Match.anyValue(),
           USER_POOL_ID: Match.anyValue(),
           USER_POOL_CLIENT_ID: Match.anyValue(),
+          DEVICE_TOKEN_SECRET_ARN: Match.anyValue(),
         },
       },
     });

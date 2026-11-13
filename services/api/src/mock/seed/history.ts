@@ -1,4 +1,5 @@
 import type { MedicalRecord, MetricId, Patient, Session, SessionPlan, Side } from '@tempo/shared';
+import type { MetricValue } from '../../store/types.ts';
 import { gaussian, type Random } from './random.ts';
 
 const dayMs = 86_400_000;
@@ -29,14 +30,6 @@ export type MetricStory = {
   max: number;
 };
 
-export type MetricValue = {
-  patientId: string;
-  sessionId: string;
-  metricId: MetricId;
-  side?: Side;
-  t: string;
-  value: number;
-};
 
 export type PatientSeed = {
   patient: Patient;

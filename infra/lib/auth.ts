@@ -24,7 +24,7 @@ export class Auth extends Construct {
 
     this.webClient = this.userPool.addClient('WebClient', {
       generateSecret: false,
-      authFlows: { userSrp: true },
+      authFlows: { userSrp: true, adminUserPassword: true },
       disableOAuth: true,
       preventUserExistenceErrors: true,
     });

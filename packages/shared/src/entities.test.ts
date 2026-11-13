@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { auditEntrySchema, institutionSchema, patientSchema, staffSchema } from './entities.ts';
-import { attending, institution, patient } from './test-fixtures.ts';
+import { auditEntrySchema, institutionSchema, pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
+import { attending, institution, pairedDevice, patient } from './test-fixtures.ts';
 
 describe('institutionSchema', () => {
   it('accepts an institution', () => {
@@ -34,5 +34,16 @@ describe('auditEntrySchema', () => {
       at: '2026-11-13T10:02:00.000Z',
     };
     expect(auditEntrySchema.safeParse(entry).success).toBe(true);
+  });
+});
+
+describe('pairedDeviceSchema', () => {
+  it('accepts a paired device', () => {
+    expect(pairedDeviceSchema.safeParse(pairedDevice).success).toBe(true);
+  });
+
+  it('accepts a revoked device', () => {
+    const revoked = { ...pairedDevice, revokedAt: '2026-11-14T09:00:00.000Z', revokedBy: attending.id };
+    expect(pairedDeviceSchema.safeParse(revoked).success).toBe(true);
   });
 });

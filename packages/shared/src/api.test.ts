@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   apiErrorSchema,
   createSessionRequestSchema,
+  createPairingCodeResponseSchema,
   createSessionResponseSchema,
+  deviceListResponseSchema,
+  deviceParamsSchema,
+  devicePairingCodeRequestSchema,
+  devicePairingCodeResponseSchema,
   deviceSessionCodeRequestSchema,
   deviceSessionCodeResponseSchema,
   meResponseSchema,
@@ -13,9 +18,11 @@ import {
   patientListResponseSchema,
   patientMetricsResponseSchema,
   patientParamsSchema,
+  revokeDeviceResponseSchema,
   routes,
   sessionCodeSchema,
   sessionParamsSchema,
+  startHomeSessionResponseSchema,
   submitSessionRequestSchema,
   submitSessionResponseSchema,
 } from './api.ts';
@@ -23,6 +30,7 @@ import {
   attending,
   fingerTappingResult,
   medicalRecord,
+  pairedDevice,
   painSkip,
   patient,
   session,
@@ -140,6 +148,55 @@ describe('GET /api/patients/:patientId/metrics/:metricId', () => {
 
   it('returns a metric series', () => {
     expect(metricSeriesResponseSchema.safeParse(tapsPerSecondSeries).success).toBe(true);
+  });
+});
+
+describe('POST /api/patients/:patientId/pairing-codes', () => {
+  it('returns a code with its expiry', () => {
+    const response = { code: '583104', expiresAt: '2026-11-13T10:40:00.000Z' };
+    expect(createPairingCodeResponseSchema.safeParse(response).success).toBe(true);
+  });
+});
+
+describe('POST /api/device/pairing-code', () => {
+  it('takes a code and an optional label', () => {
+    expect(devicePairingCodeRequestSchema.safeParse({ code: '583104' }).success).toBe(true);
+    expect(devicePairingCodeRequestSchema.safeParse({ code: '583104', label: "Elena's phone" }).success).toBe(true);
+  });
+
+  it('returns a long-lived token for the patient', () => {
+    const response = {
+      token: 'patient-token-abc',
+      expiresAt: '2027-05-12T10:30:00.000Z',
+      deviceId: pairedDevice.id,
+      patientFirstName: 'Elena',
+      language: 'ro',
+    };
+    expect(devicePairingCodeResponseSchema.safeParse(response).success).toBe(true);
+  });
+});
+
+describe('GET /api/patients/:patientId/devices', () => {
+  it('lists paired devices', () => {
+    expect(deviceListResponseSchema.safeParse({ devices: [pairedDevice] }).success).toBe(true);
+  });
+});
+
+describe('POST /api/patients/:patientId/devices/:deviceId/revoke', () => {
+  it('takes patient and device params', () => {
+    expect(deviceParamsSchema.safeParse({ patientId: patient.id, deviceId: pairedDevice.id }).success).toBe(true);
+  });
+
+  it('returns the revoked device', () => {
+    const device = { ...pairedDevice, revokedAt: '2026-11-14T09:00:00.000Z', revokedBy: attending.id };
+    expect(revokeDeviceResponseSchema.safeParse({ device }).success).toBe(true);
+  });
+});
+
+describe('POST /api/device/sessions', () => {
+  it('returns the home session with its plan', () => {
+    const response = { session: { ...session, mode: 'home', status: 'in-progress' }, plan: sessionPlan };
+    expect(startHomeSessionResponseSchema.safeParse(response).success).toBe(true);
   });
 });
 
