@@ -1,3 +1,6 @@
 {
-  "app": "npx tsx bin/tempo.ts"
+  "app": "npx tsx bin/tempo.ts",
+  "context": {
+    "aiProvider": "gemini"
+  }
 }
