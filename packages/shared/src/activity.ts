@@ -30,6 +30,29 @@ export const skipReasonSchema = z.enum([
 ]);
 export const skipStageSchema = z.enum(['instructions', 'practice', 'task']);
 
+export const bodyRegionLabels = {
+  'head-neck': 'Head or neck',
+  'left-shoulder': 'Left shoulder',
+  'right-shoulder': 'Right shoulder',
+  'left-arm': 'Left arm',
+  'right-arm': 'Right arm',
+  chest: 'Chest',
+  back: 'Back',
+  'left-hip': 'Left hip',
+  'right-hip': 'Right hip',
+  'left-knee': 'Left knee',
+  'right-knee': 'Right knee',
+  'left-foot': 'Left foot',
+  'right-foot': 'Right foot',
+} as const;
+
+export type BodyRegion = keyof typeof bodyRegionLabels;
+export const bodyRegions = Object.keys(bodyRegionLabels) as BodyRegion[];
+export const bodyRegionSchema = z.enum(bodyRegions as [BodyRegion, ...BodyRegion[]]);
+
+export const bodyRegionLabel = (location: string): string =>
+  bodyRegionSchema.safeParse(location).success ? bodyRegionLabels[location as BodyRegion] : location;
+
 export type ActivityId = z.infer<typeof activityIdSchema>;
 export type ActivityKind = z.infer<typeof activityKindSchema>;
 export type SkipReason = z.infer<typeof skipReasonSchema>;

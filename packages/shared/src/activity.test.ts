@@ -3,6 +3,8 @@ import {
   activityIdSchema,
   activityIds,
   activityKindSchema,
+  bodyRegionLabel,
+  bodyRegionSchema,
   fingerTappingConfigSchema,
   fingerTappingRawResultSchema,
   rawResultSchema,
@@ -16,6 +18,17 @@ describe('activityIdSchema', () => {
 
   it('rejects a stretch activity', () => {
     expect(activityIdSchema.safeParse('stroop').success).toBe(false);
+  });
+});
+
+describe('body regions', () => {
+  it('accepts a region the patient body map offers', () => {
+    expect(bodyRegionSchema.safeParse('left-knee').success).toBe(true);
+  });
+
+  it('labels a known region and passes an unknown one through', () => {
+    expect(bodyRegionLabel('right-shoulder')).toBe('Right shoulder');
+    expect(bodyRegionLabel('elbow')).toBe('elbow');
   });
 });
 
