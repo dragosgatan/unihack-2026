@@ -125,6 +125,20 @@ describe('TempoStack', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: 'ANY /api/{proxy+}' });
   });
 
+  it('throttles the two code redemption routes and leaves the rest on the default', () => {
+    const limit = { ThrottlingRateLimit: 5, ThrottlingBurstLimit: 10 };
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: 'POST /api/device/session-code' });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: 'POST /api/device/pairing-code' });
+    template.resourceCountIs('AWS::ApiGatewayV2::Stage', 1);
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      DefaultRouteSettings: Match.absent(),
+      RouteSettings: {
+        'POST /api/device/session-code': limit,
+        'POST /api/device/pairing-code': limit,
+      },
+    });
+  });
+
   it('lets only the main branch of the repo assume the deploy role', () => {
     template.resourceCountIs('AWS::IAM::OIDCProvider', 1);
     template.hasResourceProperties('AWS::IAM::Role', {

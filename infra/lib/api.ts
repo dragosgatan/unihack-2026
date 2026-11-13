@@ -1,5 +1,5 @@
 import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
-import { HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { CfnStage, HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type { IUserPool, IUserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
@@ -8,6 +8,8 @@ import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+
+const codeRedemptionPaths = ['/api/device/session-code', '/api/device/pairing-code'];
 
 export interface ApiProps {
   bundleDir: string;
@@ -54,12 +56,19 @@ export class Api extends Construct {
     props.table.grantReadWriteData(handler);
     props.uploads.grantReadWrite(handler);
 
+    const integration = new HttpLambdaIntegration('Lambda', handler);
     this.httpApi = new HttpApi(this, 'HttpApi');
-    this.httpApi.addRoutes({
-      path: '/api/{proxy+}',
-      methods: [HttpMethod.ANY],
-      integration: new HttpLambdaIntegration('Lambda', handler),
-    });
+    this.httpApi.addRoutes({ path: '/api/{proxy+}', methods: [HttpMethod.ANY], integration });
+
+    const stage = this.httpApi.defaultStage?.node.defaultChild;
+    if (!(stage instanceof CfnStage)) throw new Error('The HTTP API has no default stage to throttle');
+    const codeRoutes = codeRedemptionPaths.flatMap((path) =>
+      this.httpApi.addRoutes({ path, methods: [HttpMethod.POST], integration }),
+    );
+    stage.routeSettings = Object.fromEntries(
+      codeRedemptionPaths.map((path) => [`POST ${path}`, { ThrottlingRateLimit: 5, ThrottlingBurstLimit: 10 }]),
+    );
+    stage.node.addDependency(...codeRoutes);
 
     const stack = Stack.of(this);
     this.domainName = `${this.httpApi.apiId}.execute-api.${stack.region}.${stack.urlSuffix}`;

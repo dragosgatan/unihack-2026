@@ -17,7 +17,15 @@ import {
   type DeviceClaims,
 } from './auth/device-tokens.ts';
 import type { StaffAuth } from './auth/staff.ts';
-import { bearerToken, errorResponse, HttpError, mountRoute, type RouteParts, type RouteResponse } from './http.ts';
+import {
+  bearerToken,
+  errorResponse,
+  HttpError,
+  internalErrorResponse,
+  mountRoute,
+  type RouteParts,
+  type RouteResponse,
+} from './http.ts';
 import { buildMetricSeries, listPatientMetrics } from './series.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
@@ -239,7 +247,7 @@ export const createApp = ({ store, staffAuth, tokenSecret, clock, demoSessionCod
   });
 
   app.notFound(() => errorResponse('not_found', 'Route not found'));
-  app.onError((error) => errorResponse('internal', error.message));
+  app.onError((error) => internalErrorResponse(error));
 
   return app;
 };

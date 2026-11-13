@@ -39,6 +39,11 @@ const jsonResponse = (body: unknown, status: number): Response =>
 export const errorResponse = (code: ErrorCode, message: string): Response =>
   jsonResponse({ error: { code, message } }, statusByCode[code]);
 
+export const internalErrorResponse = (...logged: unknown[]): Response => {
+  console.error(...logged);
+  return errorResponse('internal', 'Something went wrong');
+};
+
 export const bearerToken = (authorization: string | undefined): string | undefined =>
   authorization?.match(/^Bearer (\S+)$/)?.[1];
 
@@ -79,7 +84,10 @@ export const mountRoute = <Route extends RouteDefinition, Caller extends object>
       const body = parsePart(route, 'body', route.body ? await readJson(c) : undefined);
       const checked = route.response.safeParse(await handler({ params, query, body, ...caller }));
       if (!checked.success) {
-        return errorResponse('internal', `Response does not match the schema for ${route.method} ${route.path}`);
+        return internalErrorResponse(
+          `Response does not match the schema for ${route.method} ${route.path}`,
+          checked.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.code}`),
+        );
       }
       return jsonResponse(checked.data, 200);
     } catch (error) {
