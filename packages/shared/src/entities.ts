@@ -41,6 +41,8 @@ export const auditEntityTypeSchema = z.enum([
   'check-in-entry',
   'episode',
   'suggestion',
+  'course-of-care',
+  'baseline',
 ]);
 
 export const auditEntrySchema = z.object({

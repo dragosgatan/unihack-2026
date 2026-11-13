@@ -14,9 +14,11 @@ export const sessionPlanItemSchema = z.object({
 
 export const sessionPlanSchema = z.object({
   id: idSchema,
+  version: z.number().int().positive(),
+  changeReason: z.string().min(1).optional(),
   patientId: idSchema,
   items: z.array(sessionPlanItemSchema).min(1),
-  schedule: z.object({ sessionsPerWeek: z.number().int().min(1).max(14) }),
+  schedule: z.object({ sessions: z.number().int().min(1).max(14), per: z.enum(['week', 'month']) }),
   language: languageSchema,
   createdBy: idSchema,
   updatedAt: isoDateTimeSchema,
@@ -29,6 +31,7 @@ export const sessionSchema = z.object({
   id: idSchema,
   patientId: idSchema,
   planId: idSchema,
+  planVersion: z.number().int().positive(),
   mode: sessionModeSchema,
   status: sessionStatusSchema,
   partial: z.boolean(),

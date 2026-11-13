@@ -7,4 +7,5 @@ export * from './session.ts';
 export * from './checkin.ts';
 export * from './suggestion.ts';
 export * from './metrics.ts';
+export * from './care.ts';
 export * from './api.ts';

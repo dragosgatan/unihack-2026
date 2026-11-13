@@ -4,7 +4,16 @@ import { idSchema, isoDateSchema, isoDateTimeSchema, sideSchema } from './common
 export const timelineEventSchema = z.object({
   id: idSchema,
   t: isoDateTimeSchema,
-  type: z.enum(['medication-change', 'surgery', 'fall', 'milestone', 'other']),
+  type: z.enum([
+    'medication-change',
+    'surgery',
+    'fall',
+    'milestone',
+    'plan-change',
+    'baseline-reset',
+    'phase-change',
+    'other',
+  ]),
   label: z.string().min(1),
 });
 
@@ -12,6 +21,16 @@ export const affectedLimbSchema = z.object({
   limb: z.enum(['arm', 'hand', 'leg', 'foot']),
   side: sideSchema,
   prosthesis: z.boolean(),
+});
+
+export const rehabPhaseTargetSchema = z.object({ label: z.string().min(1), met: z.boolean() });
+
+export const completedRehabPhaseSchema = z.object({
+  name: z.string().min(1),
+  enteredAt: isoDateSchema,
+  completedAt: isoDateSchema,
+  targets: z.array(rehabPhaseTargetSchema),
+  decidedBy: idSchema,
 });
 
 export const injurySchema = z.object({
@@ -28,9 +47,11 @@ export const injurySchema = z.object({
   rehabPhase: z
     .object({
       name: z.string().min(1),
-      targets: z.array(z.object({ label: z.string().min(1), met: z.boolean() })),
+      enteredAt: isoDateSchema,
+      targets: z.array(rehabPhaseTargetSchema),
     })
     .optional(),
+  phaseHistory: z.array(completedRehabPhaseSchema),
 });
 
 export const diagnosisSchema = z.object({
@@ -68,6 +89,8 @@ export const medicalRecordSchema = z.object({
 
 export type TimelineEvent = z.infer<typeof timelineEventSchema>;
 export type AffectedLimb = z.infer<typeof affectedLimbSchema>;
+export type RehabPhaseTarget = z.infer<typeof rehabPhaseTargetSchema>;
+export type CompletedRehabPhase = z.infer<typeof completedRehabPhaseSchema>;
 export type Injury = z.infer<typeof injurySchema>;
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
 export type Medication = z.infer<typeof medicationSchema>;

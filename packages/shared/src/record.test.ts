@@ -27,11 +27,21 @@ describe('medicalRecordSchema', () => {
         sport: { name: 'Football', level: 'competitive' },
         rehabPhase: {
           name: 'Phase 2',
+          enteredAt: '2026-09-01',
           targets: [
             { label: 'Full extension', met: true },
             { label: 'Symmetry above 90%', met: false },
           ],
         },
+        phaseHistory: [
+          {
+            name: 'Phase 1',
+            enteredAt: '2026-07-21',
+            completedAt: '2026-09-01',
+            targets: [{ label: 'No swelling after exercise', met: true }],
+            decidedBy: attending.id,
+          },
+        ],
       },
       diagnoses: [{ code: 'S83.511A', label: 'Sprain of anterior cruciate ligament of right knee' }],
       medications: [],

@@ -72,13 +72,15 @@ export const medicalRecord = {
 
 export const sessionPlan = {
   id: 'plan-1',
+  version: 2,
+  changeReason: 'Shoulder raise target raised from 100° to 120°',
   patientId: patient.id,
   items: [
     { activityId: 'check-in-pain', kind: 'check-in', config: {} },
     { activityId: 'finger-tapping', kind: 'test', config: { sides: ['right', 'left'], trialDurationMs: 15000 } },
     { activityId: 'shoulder-raise', kind: 'exercise', config: {}, targetRepetitions: 10, targetAngle: 120, side: 'right' },
   ],
-  schedule: { sessionsPerWeek: 2 },
+  schedule: { sessions: 2, per: 'week' },
   language: 'ro',
   createdBy: attending.id,
   updatedAt: '2026-10-01T08:10:00.000Z',
@@ -88,6 +90,7 @@ export const session = {
   id: 'sess-1',
   patientId: patient.id,
   planId: sessionPlan.id,
+  planVersion: sessionPlan.version,
   mode: 'kiosk',
   status: 'created',
   partial: false,

@@ -15,6 +15,7 @@ describe('suggestionSchema', () => {
     const suggestion = {
       id: 'sugg-1',
       patientId: patient.id,
+      kind: 'review',
       text: 'Consider reviewing the timing of the evening dose against the tapping trend.',
       evidence: [
         { metricId: 'finger-tapping.taps-per-second', sessionId: session.id, t: '2026-11-13T10:20:00.000Z', label: 'Right-hand tapping rate' },

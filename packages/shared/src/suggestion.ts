@@ -16,11 +16,13 @@ export const suggestionEvidenceSchema = z.object({
   sourceUrl: z.url().optional(),
 });
 
+export const suggestionKindSchema = z.enum(['review', 'progression']);
 export const suggestionStatusSchema = z.enum(['proposed', 'accepted', 'edited', 'dismissed']);
 
 export const suggestionSchema = z.object({
   id: idSchema,
   patientId: idSchema,
+  kind: suggestionKindSchema,
   text: z.string().min(1),
   evidence: z.array(suggestionEvidenceSchema),
   status: suggestionStatusSchema,
@@ -33,5 +35,6 @@ export const suggestionSchema = z.object({
 
 export type AiProvenance = z.infer<typeof aiProvenanceSchema>;
 export type SuggestionEvidence = z.infer<typeof suggestionEvidenceSchema>;
+export type SuggestionKind = z.infer<typeof suggestionKindSchema>;
 export type SuggestionStatus = z.infer<typeof suggestionStatusSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
