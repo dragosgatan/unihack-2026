@@ -1,24 +1,6 @@
-import type { Language } from '@tempo/shared';
+import { bodyRegionLabels, bodyRegions, type BodyRegion, type Language } from '@tempo/shared';
 import { useSpoken } from './feedback.ts';
 import { TapButton } from './TapButton.tsx';
-
-const regions = [
-  ['head-neck', 'Head or neck'],
-  ['left-shoulder', 'Left shoulder'],
-  ['right-shoulder', 'Right shoulder'],
-  ['left-arm', 'Left arm'],
-  ['right-arm', 'Right arm'],
-  ['chest', 'Chest'],
-  ['back', 'Back'],
-  ['left-hip', 'Left hip'],
-  ['right-hip', 'Right hip'],
-  ['left-knee', 'Left knee'],
-  ['right-knee', 'Right knee'],
-  ['left-foot', 'Left foot'],
-  ['right-foot', 'Right foot'],
-] as const;
-
-export type BodyRegion = (typeof regions)[number][0];
 
 type BodyMapProps = {
   title: string;
@@ -38,14 +20,14 @@ export function BodyMap({ title, language, onPick }: BodyMapProps) {
         </TapButton>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {regions.map(([region, label]) => (
+        {bodyRegions.map((region) => (
           <TapButton
             key={region}
             variant="secondary"
             className={region === 'head-neck' ? 'col-span-2' : ''}
             onTap={() => onPick(region)}
           >
-            <span className="text-[20pt] leading-tight">{label}</span>
+            <span className="text-[20pt] leading-tight">{bodyRegionLabels[language][region]}</span>
           </TapButton>
         ))}
       </div>
