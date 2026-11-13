@@ -40,7 +40,7 @@ export function LargeTitle({ title, back, actions, className }: LargeTitleProps)
 
   return (
     <>
-      <div ref={barRef} className="sticky top-0 z-10 isolate pt-[env(safe-area-inset-top)]">
+      <div ref={barRef} className="sticky top-0 z-10 isolate pt-[env(safe-area-inset-top,0px)]">
         <div aria-hidden="true" className={cx('material-bar absolute inset-0 -z-10 border-b border-separator', fade, collapsed ? 'opacity-100' : 'opacity-0')} />
         <div className="grid min-h-11 grid-cols-[1fr_auto_1fr] items-center gap-2 px-2">
           <div className="flex min-w-0 items-center justify-start">

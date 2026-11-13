@@ -26,8 +26,8 @@ export function NavShell({ items, children, accessory, className }: NavShellProp
       <nav
         aria-label="Main"
         className={cx(
-          'material-bar fixed inset-x-0 bottom-0 z-20 flex border-t border-separator pb-[env(safe-area-inset-bottom)]',
-          'md:inset-x-auto md:inset-y-0 md:left-0 md:w-68 md:flex-col md:border-t-0 md:border-r md:px-3 md:pt-[calc(env(safe-area-inset-top)+1.5rem)] md:pb-[calc(env(safe-area-inset-bottom)+1rem)]',
+          'material-bar fixed inset-x-0 bottom-0 z-20 flex border-t border-separator pb-[env(safe-area-inset-bottom,0px)]',
+          'md:inset-x-auto md:inset-y-0 md:left-0 md:w-68 md:flex-col md:border-t-0 md:border-r md:px-3 md:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] md:pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]',
         )}
       >
         <p className="hidden px-3 pb-4 text-title-2 font-bold md:block">Tempo</p>
@@ -54,7 +54,7 @@ export function NavShell({ items, children, accessory, className }: NavShellProp
           {accessory !== undefined && <li className="flex flex-1 items-center justify-center md:mt-auto md:flex-none md:justify-start md:px-1">{accessory}</li>}
         </ul>
       </nav>
-      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0 md:pl-68">{children}</div>
+      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-68">{children}</div>
     </div>
   );
 }

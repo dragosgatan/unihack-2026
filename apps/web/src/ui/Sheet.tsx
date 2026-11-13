@@ -248,7 +248,7 @@ export function Sheet({ open, onClose, title, action, className, children }: She
         onKeyDown={handleKeyDown}
         style={{ y, opacity: presence, scale: mode === 'pop' ? popScale : 1 }}
         className={cx(
-          'relative flex max-h-[92dvh] w-full flex-col rounded-t-sheet bg-surface-elevated pb-[env(safe-area-inset-bottom)] text-label shadow-sheet outline-none',
+          'relative flex max-h-[92dvh] w-full flex-col rounded-t-sheet bg-surface-elevated pb-[env(safe-area-inset-bottom,0px)] text-label shadow-sheet outline-none',
           'after:absolute after:inset-x-0 after:top-full after:h-[50dvh] after:bg-surface-elevated',
           'md:max-h-[85dvh] md:max-w-lg md:rounded-sheet md:pb-0 md:after:hidden',
           className,

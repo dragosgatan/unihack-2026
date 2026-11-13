@@ -15,14 +15,14 @@ export function Card({ title, action, onPress, className, children }: CardProps)
     <>
       {(title !== undefined || action !== undefined) && (
         <span className="mb-2 flex items-center justify-between gap-3">
-          {title !== undefined && <TitleTag className="text-subhead font-semibold text-label">{title}</TitleTag>}
+          {title !== undefined && <TitleTag className="min-w-0 text-subhead font-semibold text-label">{title}</TitleTag>}
           {action !== undefined && <span className="ml-auto shrink-0 text-subhead text-label-secondary">{action}</span>}
         </span>
       )}
       {children}
     </>
   );
-  const base = 'block rounded-card bg-surface p-4 text-label shadow-card';
+  const base = 'block min-w-0 break-words rounded-card bg-surface p-4 text-label shadow-card';
 
   if (onPress) {
     return (

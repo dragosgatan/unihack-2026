@@ -206,6 +206,25 @@
 }
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  button,
+  a,
+  [role='button'],
+  [role='tab'],
+  [role='radio'],
+  [role='switch'] {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   body {
     background-color: var(--ui-grouped);
     color: var(--ui-label);
@@ -215,7 +234,6 @@
     letter-spacing: var(--text-body--letter-spacing);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    -webkit-tap-highlight-color: transparent;
   }
 
   @media (prefers-reduced-motion: reduce) {

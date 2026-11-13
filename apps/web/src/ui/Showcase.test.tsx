@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, configure, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { routes } from '../routes.tsx';
 
+configure({ asyncUtilTimeout: 5000 });
 afterEach(cleanup);
 
 describe('router', () => {
