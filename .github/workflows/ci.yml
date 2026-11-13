@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore: ["**/*.md"]
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      scaffolded: ${{ steps.repo.outputs.scaffolded }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: repo
+        run: echo "scaffolded=$([ -f package-lock.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        run: npm ci
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        run: npm run typecheck --workspaces --if-present
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        run: npm run lint --workspaces --if-present
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        run: npm run test --workspaces --if-present
+
+      - if: steps.repo.outputs.scaffolded == 'true'
+        run: npm run build --workspaces --if-present
+
+  deploy:
+    needs: check
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' &&
+      needs.check.outputs.scaffolded == 'true' &&
+      vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build --workspaces --if-present
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-1' }}
+
+      - run: npm run deploy -w infra
+
+      - name: Smoke test
+        if: vars.APP_URL != ''
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "${{ vars.APP_URL }}/api/health"

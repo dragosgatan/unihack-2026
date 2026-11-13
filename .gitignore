@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dev-dist/
+build/
+cdk.out/
+coverage/
+*.tsbuildinfo
+*.log
+.env*
+*.p12
+*.mobileprovision
+.DS_Store

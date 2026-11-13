@@ -1,0 +1,23 @@
+{
+  "name": "@tempo/api",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/dev.ts",
+    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/lambda.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tempo/shared": "*",
+    "hono": "4.13.18"
+  },
+  "devDependencies": {
+    "@hono/node-server": "2.1.8",
+    "esbuild": "0.28.2"
+  }
+}

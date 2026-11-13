@@ -1,0 +1,8 @@
+import { serve } from '@hono/node-server';
+import { app } from './app.ts';
+
+const port = 8787;
+
+serve({ fetch: app.fetch, port }, () => {
+  console.log(`API listening on http://localhost:${port}`);
+});

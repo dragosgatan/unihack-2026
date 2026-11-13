@@ -1,0 +1,22 @@
+{
+  "name": "@tempo/infra",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "cdk synth --quiet",
+    "deploy": "cdk deploy --all --require-approval never",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.277.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "aws-cdk": "2.1148.1"
+  }
+}
