@@ -9,6 +9,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: { globIgnores: ['**/*.wasm'] },
       manifest: {
         name: 'Tempo',
         short_name: 'Tempo',
@@ -19,6 +20,7 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': 'http://localhost:8787',
     },
