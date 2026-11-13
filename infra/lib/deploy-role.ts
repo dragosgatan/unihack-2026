@@ -9,7 +9,7 @@ import {
 import { Construct } from 'constructs';
 
 const githubIssuer = 'token.actions.githubusercontent.com';
-const deployBranchSubject = 'repo:dragosgatan/unihack-2026:ref:refs/heads/main';
+const deployBranchSubject = 'repo:dragosgatan@239200524/unihack-2026@1456485054:ref:refs/heads/main';
 
 export class DeployRole extends Construct {
   readonly role: Role;

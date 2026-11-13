@@ -100,7 +100,7 @@ describe('TempoStack', () => {
             Condition: {
               StringEquals: {
                 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-                'token.actions.githubusercontent.com:sub': 'repo:dragosgatan/unihack-2026:ref:refs/heads/main',
+                'token.actions.githubusercontent.com:sub': 'repo:dragosgatan@239200524/unihack-2026@1456485054:ref:refs/heads/main',
               },
             },
           }),
