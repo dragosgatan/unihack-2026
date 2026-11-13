@@ -4,6 +4,8 @@ import {
   codeKey,
   currentPlanKey,
   deviceKey,
+  flagKey,
+  flagPrefix,
   institutionKey,
   latestKey,
   patientIndexKey,
@@ -12,6 +14,7 @@ import {
   pointKey,
   pointPrefix,
   recordKey,
+  reportKey,
   resultKey,
   sessionIndexKey,
   sessionKey,
@@ -73,5 +76,13 @@ describe('table keys', () => {
     expect(sessionIndexKey('pat-1', t)).toEqual({ gsi1pk: 'PATIENT#pat-1', gsi1sk: `SESSION#${t}` });
     expect(resultKey('sess-1', 3)).toEqual({ pk: 'SESSION#sess-1', sk: 'RESULT#03' });
     expect(codeKey('042917')).toEqual({ pk: 'CODE#042917', sk: 'META' });
+  });
+
+  it('keeps the report under the session and one flag per session, metric and side under the patient', () => {
+    expect(reportKey('sess-1')).toEqual({ pk: 'SESSION#sess-1', sk: 'REPORT' });
+    const flag = flagKey('pat-1', 'sess-1', 'finger-tapping.taps-per-second', 'left');
+    expect(flag).toEqual({ pk: 'PATIENT#pat-1', sk: 'FLAG#sess-1#finger-tapping.taps-per-second#left' });
+    expect(flag.sk.startsWith(flagPrefix('sess-1'))).toBe(true);
+    expect(flag.sk.startsWith(flagPrefix('sess-10'))).toBe(false);
   });
 });

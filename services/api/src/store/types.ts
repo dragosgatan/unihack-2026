@@ -1,6 +1,8 @@
 import type {
   ActivityId,
+  ActivityResult,
   Baseline,
+  Flag,
   Institution,
   MedicalRecord,
   MetricId,
@@ -9,6 +11,7 @@ import type {
   Patient,
   Session,
   SessionPlan,
+  SessionReport,
   SessionStatus,
   SkipEvent,
   Staff,
@@ -62,4 +65,14 @@ export type Store = {
   putRecord(record: MedicalRecord): Promise<void>;
   putPlan(plan: SessionPlan): Promise<void>;
   putMetricValues(values: MetricValue[]): Promise<void>;
+  listResults(sessionId: string): Promise<ActivityResult[]>;
+  putResults(sessionId: string, results: ActivityResult[]): Promise<void>;
+  setSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
+  putBaseline(baseline: Baseline): Promise<void>;
+  baselineAt(patientId: string, metricId: MetricId, side: Side | undefined, at: string): Promise<Baseline | undefined>;
+  previousPoint(patientId: string, metricId: MetricId, side: Side | undefined, before: string): Promise<MetricPoint | undefined>;
+  putFlags(flags: Flag[]): Promise<void>;
+  listFlags(patientId: string, sessionId: string): Promise<Flag[]>;
+  putReport(report: SessionReport): Promise<void>;
+  getReport(sessionId: string): Promise<SessionReport | undefined>;
 };

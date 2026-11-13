@@ -12,13 +12,16 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import {
+  activityResultSchema,
   baselineSchema,
+  flagSchema,
   isoDateTimeSchema,
   medicalRecordSchema,
   metricIdSchema,
   pairedDeviceSchema,
   patientSchema,
   sessionPlanSchema,
+  sessionReportSchema,
   sessionSchema,
   sideSchema,
   skipEventSchema,
@@ -27,11 +30,14 @@ import {
   type Session,
 } from '@tempo/shared';
 import {
+  baselineKey,
   baselinePrefix,
   codeKey,
   currentPlanKey,
   deviceKey,
   devicePrefix,
+  flagKey,
+  flagPrefix,
   institutionKey,
   institutionPk,
   latestKey,
@@ -44,9 +50,12 @@ import {
   pointKey,
   pointPrefix,
   recordKey,
+  reportKey,
   resultKey,
+  resultPrefix,
   sessionIndexKey,
   sessionKey,
+  sessionPk,
   skipKey,
   skipRange,
   staffIndexKey,
@@ -131,6 +140,19 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
           KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
           ExpressionAttributeValues: { ':pk': pk, ':prefix': prefix },
           ScanIndexForward: forward,
+          Limit: count,
+        }),
+      )
+    ).Items ?? [];
+
+  const queryLast = async (pk: string, low: string, high: string, count: number): Promise<Item[]> =>
+    (
+      await client.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'pk = :pk AND sk BETWEEN :low AND :high',
+          ExpressionAttributeValues: { ':pk': pk, ':low': low, ':high': high },
+          ScanIndexForward: false,
           Limit: count,
         }),
       )
@@ -358,6 +380,53 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
           if (!isConditionFailure(error)) throw error;
         }
       }
+    },
+
+    listResults: async (sessionId) =>
+      (await queryPrefix(sessionPk(sessionId), resultPrefix)).map((item) => activityResultSchema.parse(dataOf(item))),
+
+    putResults: (sessionId, results) =>
+      writeAll(results.map((result, index) => ({ ...resultKey(sessionId, index), data: result }))),
+
+    setSessionStatus: async (sessionId, status) => {
+      await client.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: sessionKey(sessionId),
+          UpdateExpression: 'SET #data.#status = :status',
+          ConditionExpression: 'attribute_exists(pk)',
+          ExpressionAttributeNames: { ...dataName, '#status': 'status' },
+          ExpressionAttributeValues: { ':status': status },
+        }),
+      );
+    },
+
+    putBaseline: (baseline) =>
+      put({ ...baselineKey(baseline.patientId, baseline.metricId, baseline.side, baseline.from), data: baseline }),
+
+    baselineAt: async (patientId, metricId, side, at) => {
+      const prefix = baselinePrefix(metricId, side);
+      const [item] = await queryLast(patientPk(patientId), prefix, `${prefix}${at}`, 1);
+      return item && baselineSchema.parse(dataOf(item));
+    },
+
+    previousPoint: async (patientId, metricId, side, before) => {
+      const prefix = pointPrefix(metricId, side);
+      const items = await queryLast(patientPk(patientId), prefix, `${prefix}${before}`, 2);
+      return items.map(point).find((candidate) => candidate.t < before);
+    },
+
+    putFlags: (flags) =>
+      writeAll(flags.map((flag) => ({ ...flagKey(flag.patientId, flag.sessionId, flag.metricId, flag.side), data: flag }))),
+
+    listFlags: async (patientId, sessionId) =>
+      (await queryPrefix(patientPk(patientId), flagPrefix(sessionId))).map((item) => flagSchema.parse(dataOf(item))),
+
+    putReport: (report) => put({ ...reportKey(report.sessionId), data: report }),
+
+    getReport: async (sessionId) => {
+      const item = await get(reportKey(sessionId));
+      return item && sessionReportSchema.parse(dataOf(item));
     },
   };
 };

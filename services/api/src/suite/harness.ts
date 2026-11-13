@@ -16,6 +16,7 @@ import type { Store } from '../store/types.ts';
 export type Harness = {
   app: Hono;
   seed: Seed;
+  startedPipelines: string[];
   id: (seedId: string) => string;
   setNow: (now: Date) => void;
 };
@@ -26,16 +27,21 @@ const suiteSecret = 'tempo-suite-device-token-secret';
 
 const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>): Harness => {
   let now = fixedNow;
+  const startedPipelines: string[] = [];
   const tokens = new Map([...mockStaffTokens].map(([token, staffId]) => [token, ids.get(staffId) ?? staffId]));
   const app = createApp({
     store,
     staffAuth: createMockStaffAuth(store, tokens),
     tokenSecret: async () => suiteSecret,
     clock: () => now,
+    startPipeline: async (sessionId) => {
+      startedPipelines.push(sessionId);
+    },
   });
   return {
     app,
     seed,
+    startedPipelines,
     id: (seedId) => ids.get(seedId) ?? seedId,
     setNow: (next) => {
       now = next;

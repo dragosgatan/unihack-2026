@@ -74,9 +74,18 @@ export const sessionIndexKey = (patientId: string, createdAt: string): IndexKey 
   gsi1pk: patientPk(patientId),
   gsi1sk: `SESSION#${createdAt}`,
 });
+export const resultPrefix = 'RESULT#';
 export const resultKey = (sessionId: string, index: number): Key => ({
   pk: sessionPk(sessionId),
-  sk: `RESULT#${pad(index, 2)}`,
+  sk: `${resultPrefix}${pad(index, 2)}`,
+});
+
+export const reportKey = (sessionId: string): Key => ({ pk: sessionPk(sessionId), sk: 'REPORT' });
+
+export const flagPrefix = (sessionId: string): string => `FLAG#${sessionId}#`;
+export const flagKey = (patientId: string, sessionId: string, metricId: MetricId, side: Side | undefined): Key => ({
+  pk: patientPk(patientId),
+  sk: `${flagPrefix(sessionId)}${metricId}#${sideKey(side)}`,
 });
 
 export const codeKey = (code: string): Key => ({ pk: `CODE#${code}`, sk: meta });

@@ -10,3 +10,7 @@ export * from './metrics.ts';
 export * from './care.ts';
 export * from './api.ts';
 export * from './assistant.ts';
+export * from './ai.ts';
+export * from './baseline.ts';
+export * from './flag.ts';
+export * from './report.ts';

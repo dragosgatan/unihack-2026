@@ -3,6 +3,7 @@ import { handle } from 'hono/aws-lambda';
 import { createCognitoStaffAuth } from './auth/staff.ts';
 import { cacheSuccess } from './cache.ts';
 import { createApp } from './create-app.ts';
+import { createStepFunctionsStarter } from './pipeline-starter.ts';
 import { createDynamoStore } from './store/dynamo.ts';
 
 const requiredEnv = (name: string): string => {
@@ -30,4 +31,6 @@ const staffAuth = createCognitoStaffAuth({
   clock,
 });
 
-export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock }));
+const startPipeline = createStepFunctionsStarter(requiredEnv('STATE_MACHINE_ARN'));
+
+export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline }));

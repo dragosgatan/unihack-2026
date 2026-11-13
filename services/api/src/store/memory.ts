@@ -1,12 +1,14 @@
 import type {
   ActivityResult,
   Baseline,
+  Flag,
   Institution,
   MedicalRecord,
   PairedDevice,
   Patient,
   Session,
   SessionPlan,
+  SessionReport,
   Side,
   Staff,
 } from '@tempo/shared';
@@ -17,7 +19,9 @@ import type { CodeEntry, MetricValue, Store } from './types.ts';
 const seriesKey = (patientId: string, metricId: string, side: Side | undefined): string =>
   `${patientId}|${metricId}|${side ?? 'none'}`;
 
-const byTime = <Item extends { t: string }>(a: Item, b: Item): number => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+const flagId = (flag: Flag): string => `${flag.sessionId}|${seriesKey(flag.patientId, flag.metricId, flag.side)}`;
+
+const byTime =<Item extends { t: string }>(a: Item, b: Item): number => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
 
 const isOpen = (session: Session): boolean => session.status === 'created' || session.status === 'in-progress';
 
@@ -37,6 +41,8 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const latest = new Map<string, MetricValue>();
   const baselines = new Map<string, Baseline[]>();
   const skips = new Map<string, StoredSkip[]>();
+  const flags = new Map<string, Flag>();
+  const reports = new Map<string, SessionReport>();
 
   const addMetricValues = (values: MetricValue[]): void => {
     for (const value of values) {
@@ -164,5 +170,54 @@ export const createMemoryStore = (seed?: Seed): Store => {
     putMetricValues: async (values) => {
       addMetricValues(values);
     },
+
+    listResults: async (sessionId) => results.get(sessionId) ?? [],
+
+    putResults: async (sessionId, updated) => {
+      const stored = [...(results.get(sessionId) ?? [])];
+      updated.forEach((result, index) => {
+        stored[index] = result;
+      });
+      results.set(sessionId, stored);
+    },
+
+    setSessionStatus: async (sessionId, status) => {
+      const current = sessions.get(sessionId);
+      if (!current) throw new Error(`Session ${sessionId} does not exist`);
+      sessions.set(sessionId, { ...current, status });
+    },
+
+    putBaseline: async (baseline) => {
+      const key = seriesKey(baseline.patientId, baseline.metricId, baseline.side);
+      const others = (baselines.get(key) ?? []).filter((existing) => existing.from !== baseline.from);
+      baselines.set(key, [...others, baseline]);
+    },
+
+    baselineAt: async (patientId, metricId, side, at) =>
+      (baselines.get(seriesKey(patientId, metricId, side)) ?? [])
+        .filter((baseline) => baseline.from <= at)
+        .reduce<Baseline | undefined>(
+          (newest, baseline) => (newest === undefined || baseline.from >= newest.from ? baseline : newest),
+          undefined,
+        ),
+
+    previousPoint: async (patientId, metricId, side, before) => {
+      const earlier = (points.get(seriesKey(patientId, metricId, side)) ?? []).filter((point) => point.t < before);
+      const last = earlier.at(-1);
+      return last && { t: last.t, value: last.value };
+    },
+
+    putFlags: async (newFlags) => {
+      for (const flag of newFlags) flags.set(flagId(flag), flag);
+    },
+
+    listFlags: async (patientId, sessionId) =>
+      [...flags.values()].filter((flag) => flag.patientId === patientId && flag.sessionId === sessionId),
+
+    putReport: async (report) => {
+      reports.set(report.sessionId, report);
+    },
+
+    getReport: async (sessionId) => reports.get(sessionId),
   };
 };

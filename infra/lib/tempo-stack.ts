@@ -7,10 +7,12 @@ import type { Construct } from 'constructs';
 import { Api } from './api.ts';
 import { Auth } from './auth.ts';
 import { DeployRole } from './deploy-role.ts';
+import { Pipeline, pipelineSteps } from './pipeline.ts';
 import { Web } from './web.ts';
 
 export interface TempoStackProps extends StackProps {
   apiBundleDir: string;
+  pipelineBundleDir: string;
   webDistDir: string;
 }
 
@@ -27,6 +29,7 @@ export class TempoStack extends Stack {
     super(scope, id, props);
 
     requireBuildOutput(props.apiBundleDir, 'lambda.mjs');
+    for (const { file } of pipelineSteps) requireBuildOutput(props.pipelineBundleDir, `${file}.mjs`);
     requireBuildOutput(props.webDistDir, 'index.html');
 
     const table = new Table(this, 'Table', {
@@ -68,6 +71,11 @@ export class TempoStack extends Stack {
       allowedMethods: [HttpMethods.GET, HttpMethods.PUT],
       allowedHeaders: ['*'],
     });
+
+    const pipeline = new Pipeline(this, 'Pipeline', { bundleDir: props.pipelineBundleDir, table, appUrl });
+    api.handler.addEnvironment('STATE_MACHINE_ARN', pipeline.stateMachine.stateMachineArn);
+    pipeline.stateMachine.grantStartExecution(api.handler);
+    new CfnOutput(this, 'GeminiKeySecretName', { value: pipeline.geminiKeySecretName });
 
     const deployRole = new DeployRole(this, 'Deploy');
 

@@ -26,6 +26,7 @@ import {
   type RouteParts,
   type RouteResponse,
 } from './http.ts';
+import type { PipelineStarter } from './pipeline-starter.ts';
 import { buildMetricSeries, listPatientMetrics } from './series.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
@@ -36,12 +37,20 @@ export type AppOptions = {
   staffAuth: StaffAuth;
   tokenSecret: () => Promise<string>;
   clock: () => Date;
+  startPipeline: PipelineStarter;
   demoSessionCodes?: ReadonlyMap<string, string>;
 };
 
 const firstName = (patient: Patient): string => patient.name.split(' ')[0] ?? patient.name;
 
-export const createApp = ({ store, staffAuth, tokenSecret, clock, demoSessionCodes = new Map() }: AppOptions): Hono => {
+export const createApp = ({
+  store,
+  staffAuth,
+  tokenSecret,
+  clock,
+  startPipeline,
+  demoSessionCodes = new Map(),
+}: AppOptions): Hono => {
   const app = new Hono();
   app.route('/', baseApp);
 
@@ -152,14 +161,21 @@ export const createApp = ({ store, staffAuth, tokenSecret, clock, demoSessionCod
     if (!session) throw new HttpError('not_found', 'Session not found');
     const allowed = device.scope === 'session' ? device.sid === session.id : device.pid === session.patientId;
     if (!allowed) throw new HttpError('forbidden', 'Device token is for another session');
-    if (session.status !== 'created' && session.status !== 'in-progress') {
-      return { sessionId: session.id, status: session.status };
+    const status =
+      session.status === 'created' || session.status === 'in-progress'
+        ? await store.submitSession(session, {
+            partial: body.partial,
+            submittedAt: clock().toISOString(),
+            results: body.results,
+          })
+        : session.status;
+    if (status === 'submitted') {
+      try {
+        await startPipeline(session.id);
+      } catch (error) {
+        console.error(`Could not start the pipeline for session ${session.id}`, error);
+      }
     }
-    const status = await store.submitSession(session, {
-      partial: body.partial,
-      submittedAt: clock().toISOString(),
-      results: body.results,
-    });
     return { sessionId: session.id, status };
   });
 

@@ -20,6 +20,7 @@ export interface ApiProps {
 }
 
 export class Api extends Construct {
+  readonly handler: Function;
   readonly httpApi: HttpApi;
   readonly domainName: string;
 
@@ -52,6 +53,7 @@ export class Api extends Construct {
         DEVICE_TOKEN_SECRET_ARN: deviceTokenSecret.secretArn,
       },
     });
+    this.handler = handler;
     deviceTokenSecret.grantRead(handler);
     props.table.grantReadWriteData(handler);
     props.uploads.grantReadWrite(handler);

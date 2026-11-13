@@ -41,6 +41,29 @@ describe('mock demo session codes', () => {
     expect(submitted.status).toBe(200);
   });
 
+  it('runs the pipeline on submit so the new score shows on the series once', async () => {
+    const app = buildTestApp();
+    const { session, token } = await redeem(app, '111111');
+    const completedAt = '2026-11-13T11:55:00.000Z';
+    const [result] = fingerTappingSubmission.results;
+    const body = { ...fingerTappingSubmission, results: [{ ...result, completedAt }] };
+    const path = `/api/sessions/${session.id}/submit`;
+
+    expect((await call(app, path, { method: 'POST', token, body })).body).toEqual({
+      sessionId: session.id,
+      status: 'submitted',
+    });
+    expect((await call(app, path, { method: 'POST', token, body })).body).toEqual({
+      sessionId: session.id,
+      status: 'processed',
+    });
+
+    const series = routes.getMetricSeries.response.parse(
+      (await call(app, '/api/patients/pat-1/metrics/finger-tapping.taps-per-second?range=W&side=right')).body,
+    );
+    expect(series.points.filter((point) => point.t === completedAt)).toEqual([{ t: completedAt, value: 0.2 }]);
+  });
+
   it('never hands out a demo code for a new session', async () => {
     const app = buildTestApp();
     const created = await call(app, '/api/patients/pat-2/sessions', { method: 'POST', body: { mode: 'kiosk' } });

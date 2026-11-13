@@ -40,6 +40,7 @@ describe('createApp', () => {
       },
       tokenSecret: async () => 'secret',
       clock: () => fixedNow,
+      startPipeline: async () => {},
     });
     const res = await app.request('/api/me');
     expect(res.status).toBe(500);

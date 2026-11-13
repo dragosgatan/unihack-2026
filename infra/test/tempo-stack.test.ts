@@ -5,19 +5,24 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CachePolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pipelineSteps } from '../lib/pipeline.ts';
 import { TempoStack } from '../lib/tempo-stack.ts';
 
 let root: string;
 let apiBundleDir: string;
+let pipelineBundleDir: string;
 let webDistDir: string;
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'tempo-infra-'));
   apiBundleDir = join(root, 'api');
+  pipelineBundleDir = join(root, 'pipeline');
   webDistDir = join(root, 'web');
   mkdirSync(apiBundleDir);
+  mkdirSync(pipelineBundleDir);
   mkdirSync(join(webDistDir, 'assets'), { recursive: true });
   writeFileSync(join(apiBundleDir, 'lambda.mjs'), 'export const handler = async () => ({});');
+  for (const { file } of pipelineSteps) writeFileSync(join(pipelineBundleDir, `${file}.mjs`), 'export const handler = async () => ({});');
   writeFileSync(join(webDistDir, 'index.html'), '<!doctype html>');
   writeFileSync(join(webDistDir, 'assets', 'x.js'), '');
 });
@@ -31,6 +36,7 @@ function synth(context: Record<string, string> = {}): Template {
   const stack = new TempoStack(app, 'TempoStack', {
     env: { region: 'eu-central-1' },
     apiBundleDir,
+    pipelineBundleDir,
     webDistDir,
   });
   return Template.fromStack(stack);
@@ -70,14 +76,14 @@ describe('TempoStack', () => {
   });
 
   it('generates the device token secret, deletes it with the stack and lets only the API read it', () => {
-    template.resourceCountIs('AWS::SecretsManager::Secret', 1);
-    template.hasResource('AWS::SecretsManager::Secret', {
+    const tokenSecrets = template.findResources('AWS::SecretsManager::Secret', {
       DeletionPolicy: 'Delete',
       Properties: {
         GenerateSecretString: { PasswordLength: 64, ExcludePunctuation: true },
       },
     });
-    const [secretId] = Object.keys(template.findResources('AWS::SecretsManager::Secret'));
+    expect(Object.keys(tokenSecrets)).toHaveLength(1);
+    const [secretId] = Object.keys(tokenSecrets);
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
@@ -199,6 +205,79 @@ describe('TempoStack', () => {
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 7 });
   });
 
+  it('runs each pipeline step as its own Node.js 22 ARM64 Lambda with the mock AI provider', () => {
+    for (const { file } of pipelineSteps) {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'nodejs22.x',
+        Architectures: ['arm64'],
+        Handler: `${file}.handler`,
+        Environment: {
+          Variables: {
+            TABLE_NAME: Match.anyValue(),
+            APP_URL: Match.anyValue(),
+            AI_PROVIDER: 'mock',
+            REPORT_SENDER: Match.absent(),
+          },
+        },
+      });
+    }
+    const pipelineLogGroups = Object.keys(template.findResources('AWS::Logs::LogGroup')).filter((id) =>
+      id.startsWith('Pipeline'),
+    );
+    expect(pipelineLogGroups).toHaveLength(pipelineSteps.length);
+    for (const id of pipelineLogGroups) {
+      expect(template.toJSON().Resources[id].Properties.RetentionInDays).toBe(7);
+    }
+  });
+
+  it('chains the steps in one standard state machine with a retry on every step', () => {
+    template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
+    template.hasResourceProperties('AWS::StepFunctions::StateMachine', { StateMachineType: 'STANDARD' });
+    const [machine] = Object.values(template.findResources('AWS::StepFunctions::StateMachine'));
+    const definition = JSON.stringify(machine);
+    for (const { id } of pipelineSteps) expect(definition).toContain(`\\"${id}\\":{`);
+    expect(definition.match(/MaxAttempts/g)).toHaveLength(pipelineSteps.length);
+    expect(definition.match(/States\.ALL/g)).toHaveLength(pipelineSteps.length);
+  });
+
+  it('gives only the two AI steps the Gemini key and a longer timeout', () => {
+    const functions = Object.values(template.findResources('AWS::Lambda::Function')) as {
+      Properties: { Handler: string; Timeout: number; Environment?: { Variables?: Record<string, unknown> } };
+    }[];
+    const withKey = functions.filter((fn) => fn.Properties.Environment?.Variables?.['GEMINI_SECRET_ARN'] !== undefined);
+    expect(withKey.map((fn) => fn.Properties.Handler).sort()).toEqual(['ai-items.handler', 'report.handler']);
+    for (const fn of withKey) expect(fn.Properties.Timeout).toBe(180);
+  });
+
+  it('lets the API start the pipeline and tells it which state machine to use', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'lambda.handler',
+      Environment: { Variables: { STATE_MACHINE_ARN: { Ref: Match.stringLikeRegexp('^PipelineStateMachine') } } },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'states:StartExecution',
+            Resource: { Ref: Match.stringLikeRegexp('^PipelineStateMachine') },
+          }),
+        ]),
+      },
+    });
+  });
+
+  it('sends report email through SES only when a sender is configured', () => {
+    expect(JSON.stringify(template.toJSON())).not.toContain('ses:SendEmail');
+    const withSender = synth({ reportSender: 'reports@example.test' });
+    withSender.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'notify.handler',
+      Environment: { Variables: { REPORT_SENDER: 'reports@example.test' } },
+    });
+    withSender.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: 'ses:SendEmail' })]) },
+    });
+  });
+
   it('blocks public access on both buckets', () => {
     const buckets = template.findResources('AWS::S3::Bucket');
     expect(Object.keys(buckets)).toHaveLength(2);
@@ -248,8 +327,22 @@ describe('TempoStack', () => {
         new TempoStack(app, 'TempoStack', {
           env: { region: 'eu-central-1' },
           apiBundleDir: join(root, 'missing'),
+          pipelineBundleDir,
           webDistDir,
         }),
     ).toThrow(/npm run build/);
+  });
+
+  it('fails with a clear error when a pipeline bundle is missing', () => {
+    const app = new App();
+    expect(
+      () =>
+        new TempoStack(app, 'TempoStack', {
+          env: { region: 'eu-central-1' },
+          apiBundleDir,
+          pipelineBundleDir: join(root, 'missing'),
+          webDistDir,
+        }),
+    ).toThrow(/score\.mjs.*npm run build/);
   });
 });

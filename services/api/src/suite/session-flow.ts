@@ -68,9 +68,18 @@ export const sessionFlowSuite = (factory: HarnessFactory): void => {
         body: fingerTappingSubmission,
       });
       expect(submitted).toEqual({ status: 200, body: { sessionId: created.session.id, status: 'submitted' } });
+      expect(h.startedPipelines).toContain(created.session.id);
 
       const again = await call(h.app, submitPath, { method: 'POST', token: redeemed.token, body: fingerTappingSubmission });
       expect(again).toEqual(submitted);
+    });
+
+    it('asks to start the pipeline again when a submitted session is submitted again', async () => {
+      const { token, session } = await startSession('pat-2');
+      const submitPath = `/api/sessions/${session.id}/submit`;
+      await call(h.app, submitPath, { method: 'POST', token, body: fingerTappingSubmission });
+      await call(h.app, submitPath, { method: 'POST', token, body: fingerTappingSubmission });
+      expect(h.startedPipelines.filter((id) => id === session.id)).toHaveLength(2);
     });
 
     it('rejects a code that was already used', async () => {

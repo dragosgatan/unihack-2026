@@ -2,6 +2,9 @@
   "name": "@tempo/api",
   "private": true,
   "type": "module",
+  "exports": {
+    "./store": "./src/store/index.ts"
+  },
   "engines": {
     "node": ">=22"
   },
@@ -16,7 +19,9 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1159.0",
     "@aws-sdk/client-secrets-manager": "3.1159.0",
+    "@aws-sdk/client-sfn": "3.1159.0",
     "@aws-sdk/lib-dynamodb": "3.1159.0",
+    "@tempo/pipeline": "*",
     "@tempo/shared": "*",
     "hono": "4.13.18",
     "zod": "4.6.7"
