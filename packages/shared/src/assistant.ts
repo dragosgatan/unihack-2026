@@ -115,15 +115,27 @@ export const assistantActionCallSchema = z.discriminatedUnion('id', [
   actionCall('askRecord'),
 ]);
 
-export const assistantTurnRequestSchema = z.object({
-  audio: z.object({
-    mimeType: z.string().regex(/^audio\//),
-    data: z.base64().min(1),
-  }),
+const turnContext = {
   language: languageSchema,
   screenId: idSchema,
   availableActionIds: z.array(assistantActionIdSchema),
-});
+};
+
+export const assistantTextMaxLength = 500;
+
+export const assistantTurnRequestSchema = z.union([
+  z.strictObject({
+    audio: z.object({
+      mimeType: z.string().regex(/^audio\//),
+      data: z.base64().min(1),
+    }),
+    ...turnContext,
+  }),
+  z.strictObject({
+    text: z.string().trim().min(1).max(assistantTextMaxLength),
+    ...turnContext,
+  }),
+]);
 
 export const assistantTurnResponseSchema = z.object({
   turnId: idSchema,

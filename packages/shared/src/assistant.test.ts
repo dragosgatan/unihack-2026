@@ -116,6 +116,17 @@ describe('POST /api/assistant/turn', () => {
     expect(assistantTurnRequestSchema.safeParse({ ...request, availableActionIds: ['clickElement'] }).success).toBe(false);
   });
 
+  it('takes typed text in place of the clip', () => {
+    const { audio, ...context } = request;
+    const typed = { ...context, text: '  durerea mea este șase  ' };
+    const parsed = assistantTurnRequestSchema.parse(typed);
+    expect('text' in parsed && parsed.text).toBe('durerea mea este șase');
+    expect(assistantTurnRequestSchema.safeParse({ ...typed, audio }).success).toBe(false);
+    expect(assistantTurnRequestSchema.safeParse(context).success).toBe(false);
+    expect(assistantTurnRequestSchema.safeParse({ ...context, text: '   ' }).success).toBe(false);
+    expect(assistantTurnRequestSchema.safeParse({ ...context, text: 'a'.repeat(501) }).success).toBe(false);
+  });
+
   it('returns a transcript, a reply and the actions to run', () => {
     const response = {
       turnId: 'turn-1',
