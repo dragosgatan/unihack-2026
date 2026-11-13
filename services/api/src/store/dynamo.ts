@@ -2,6 +2,7 @@ import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client
 import {
   BatchGetCommand,
   BatchWriteCommand,
+  DeleteCommand,
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
@@ -36,15 +37,16 @@ import {
   currentPlanKey,
   deviceKey,
   devicePrefix,
-  flagKey,
   flagPrefix,
   institutionKey,
   institutionPk,
+  keyOfFlag,
   latestKey,
   latestPrefix,
   patientIndexKey,
   patientIndexPrefix,
   patientKey,
+  painAlertKey,
   patientPk,
   planVersionKey,
   pointKey,
@@ -54,6 +56,7 @@ import {
   resultKey,
   resultPrefix,
   sessionIndexKey,
+  sessionIndexPrefix,
   sessionKey,
   sessionPk,
   skipKey,
@@ -220,6 +223,15 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
     },
 
     getSession,
+
+    listPatientSessions: async (patientId) => {
+      const items = await queryAll({
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk AND begins_with(gsi1sk, :prefix)',
+        ExpressionAttributeValues: { ':pk': patientPk(patientId), ':prefix': sessionIndexPrefix },
+      });
+      return items.map((item) => sessionSchema.parse(dataOf(item)));
+    },
 
     putSession: (session) => put(sessionItem(session)),
 
@@ -401,6 +413,26 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
       );
     },
 
+    claimPainAlert: async (sessionId) => {
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: painAlertKey(sessionId),
+            ConditionExpression: 'attribute_not_exists(pk)',
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    releasePainAlert: async (sessionId) => {
+      await client.send(new DeleteCommand({ TableName: tableName, Key: painAlertKey(sessionId) }));
+    },
+
     putBaseline: (baseline) =>
       put({ ...baselineKey(baseline.patientId, baseline.metricId, baseline.side, baseline.from), data: baseline }),
 
@@ -416,8 +448,7 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
       return items.map(point).find((candidate) => candidate.t < before);
     },
 
-    putFlags: (flags) =>
-      writeAll(flags.map((flag) => ({ ...flagKey(flag.patientId, flag.sessionId, flag.metricId, flag.side), data: flag }))),
+    putFlags: (flags) => writeAll(flags.map((flag) => ({ ...keyOfFlag(flag), data: flag }))),
 
     listFlags: async (patientId, sessionId) =>
       (await queryPrefix(patientPk(patientId), flagPrefix(sessionId))).map((item) => flagSchema.parse(dataOf(item))),

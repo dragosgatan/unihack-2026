@@ -1,5 +1,5 @@
 import type { SessionStatus } from '@tempo/shared';
-import { requireSession, type Email, type PipelineDeps } from '../ports.ts';
+import { requireSession, sessionLink, type Email, type PipelineDeps } from '../ports.ts';
 import type { PipelineInput } from '../state.ts';
 
 export type NotifyOutput = PipelineInput & { status: SessionStatus; notified: boolean };
@@ -9,7 +9,7 @@ export const reportEmail = (to: string, appUrl: string, sessionId: string): Emai
   subject: 'Tempo: a session report is ready',
   text: [
     'A session report is ready for you to review.',
-    `${appUrl.replace(/\/+$/, '')}/clinician/sessions/${encodeURIComponent(sessionId)}`,
+    sessionLink(appUrl, sessionId),
     'Sign in to Tempo to see the report. This email contains no patient details.',
   ].join('\n\n'),
 });
@@ -36,6 +36,6 @@ export const notify = async (
   }
 
   const status: SessionStatus = report.skipped.length > 0 ? 'completed-with-skips' : 'processed';
-  await store.setSessionStatus(sessionId, status);
+  if (status === 'processed') await store.setSessionStatus(sessionId, status);
   return { sessionId, status, notified };
 };

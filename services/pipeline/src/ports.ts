@@ -25,11 +25,14 @@ export type PointWrite = {
 
 export type PipelineStore = {
   getSession(sessionId: string): Promise<Session | undefined>;
+  listPatientSessions(patientId: string): Promise<Session[]>;
   getPatientDetail(patientId: string): Promise<{ patient: Patient; plan: SessionPlan | undefined } | undefined>;
   getStaff(staffId: string): Promise<Staff | undefined>;
   listResults(sessionId: string): Promise<ActivityResult[]>;
   putResults(sessionId: string, results: ActivityResult[]): Promise<void>;
   setSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
+  claimPainAlert(sessionId: string): Promise<boolean>;
+  releasePainAlert(sessionId: string): Promise<void>;
   putMetricValues(values: PointWrite[]): Promise<void>;
   firstPoints(patientId: string, metricId: MetricId, side: Side | undefined, count: number): Promise<MetricPoint[]>;
   previousPoint(patientId: string, metricId: MetricId, side: Side | undefined, before: string): Promise<MetricPoint | undefined>;
@@ -58,4 +61,7 @@ export const requireSession = async (store: PipelineStore, sessionId: string): P
   return session;
 };
 
-export const sideOf = (side: Side | undefined): { side?: Side } => (side ? { side } : {});
+export const sessionLink = (appUrl: string, sessionId: string): string =>
+  `${appUrl.replace(/\/+$/, '')}/clinician/sessions/${encodeURIComponent(sessionId)}`;
+
+export const sideOf =(side: Side | undefined): { side?: Side } => (side ? { side } : {});

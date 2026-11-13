@@ -1,11 +1,13 @@
 import { createMemoryStore, type Store } from '@tempo/api/store';
 import type {
+  ActivityId,
   FingerTappingTrial,
   MetricId,
   Patient,
   Session,
   SessionPlan,
   Side,
+  SkipReason,
   Staff,
   SubmittedResult,
 } from '@tempo/shared';
@@ -73,6 +75,14 @@ export const painSkip = (skippedAt: string): SubmittedResult => ({
   painLocation: 'right-shoulder',
 });
 
+export const skip = (activityId: ActivityId, reason: SkipReason, skippedAt: string): SubmittedResult => ({
+  status: 'skipped',
+  activityId,
+  reason,
+  stage: 'practice',
+  skippedAt,
+});
+
 export type Fixture = { store: Store; deps: PipelineDeps; emails: Email[] };
 
 export const fixture = async (): Promise<Fixture> => {
@@ -94,7 +104,12 @@ export const fixture = async (): Promise<Fixture> => {
   return { store, deps, emails };
 };
 
-export const submit = async (store: Store, sessionId: string, results: SubmittedResult[]): Promise<Session> => {
+export const submit = async (
+  store: Store,
+  sessionId: string,
+  results: SubmittedResult[],
+  { createdAt = day(1), submittedAt = now.toISOString() }: { createdAt?: string; submittedAt?: string } = {},
+): Promise<Session> => {
   const session: Session = {
     id: sessionId,
     patientId: patient.id,
@@ -103,10 +118,10 @@ export const submit = async (store: Store, sessionId: string, results: Submitted
     mode: 'kiosk',
     status: 'in-progress',
     partial: false,
-    createdAt: day(1),
+    createdAt,
   };
   await store.putSession(session);
-  await store.submitSession(session, { partial: false, submittedAt: now.toISOString(), results });
+  await store.submitSession(session, { partial: false, submittedAt, results });
   return session;
 };
 

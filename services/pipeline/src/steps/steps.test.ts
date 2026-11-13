@@ -128,7 +128,9 @@ describe('detectChange', () => {
     await submit(store, 'sess-1', [rightTapsPerSecond(day(10), current)]);
     await score(deps, { sessionId: 'sess-1' });
     await detectChange(deps, await compare(deps, { sessionId: 'sess-1', aiItems: [] }));
-    return (await store.listFlags(patient.id, 'sess-1')).filter((flag) => flag.metricId === tapsPerSecond);
+    return (await store.listFlags(patient.id, 'sess-1')).filter(
+      (flag) => flag.kind === 'reliable-change' && flag.metricId === tapsPerSecond,
+    );
   };
 
   it('does not flag a single bad day', async () => {
@@ -257,10 +259,10 @@ describe('notify', () => {
     expect((await store.getSession('sess-1'))?.status).toBe('processed');
   });
 
-  it('marks a session with a skipped activity as completed with skips', async () => {
+  it('reports a session with a skipped activity as completed with skips and leaves its status alone', async () => {
     const { store, deps } = await reported([rightTapsPerSecond(day(10), 4), painSkip(day(10))]);
     expect((await notify(deps, { sessionId: 'sess-1' })).status).toBe('completed-with-skips');
-    expect((await store.getSession('sess-1'))?.status).toBe('completed-with-skips');
+    expect((await store.getSession('sess-1'))?.status).toBe('submitted');
   });
 
   it('sends the email once when it runs twice', async () => {

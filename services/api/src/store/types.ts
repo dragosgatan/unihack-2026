@@ -47,6 +47,7 @@ export type Store = {
   listPatients(institutionId: string): Promise<Patient[]>;
   getPatientDetail(patientId: string): Promise<PatientDetail | undefined>;
   getSession(sessionId: string): Promise<Session | undefined>;
+  listPatientSessions(patientId: string): Promise<Session[]>;
   putSession(session: Session): Promise<void>;
   submitSession(session: Session, submission: Submission): Promise<SessionStatus>;
   createCode(entry: CodeEntry, now: Date): Promise<boolean>;
@@ -68,6 +69,8 @@ export type Store = {
   listResults(sessionId: string): Promise<ActivityResult[]>;
   putResults(sessionId: string, results: ActivityResult[]): Promise<void>;
   setSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
+  claimPainAlert(sessionId: string): Promise<boolean>;
+  releasePainAlert(sessionId: string): Promise<void>;
   putBaseline(baseline: Baseline): Promise<void>;
   baselineAt(patientId: string, metricId: MetricId, side: Side | undefined, at: string): Promise<Baseline | undefined>;
   previousPoint(patientId: string, metricId: MetricId, side: Side | undefined, before: string): Promise<MetricPoint | undefined>;

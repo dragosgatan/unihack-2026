@@ -1,4 +1,4 @@
-import { metricDefinitions, type ReportScore, type ReportSkip } from '@tempo/shared';
+import { metricDefinitions, type ReportScore, type ReportSkip, type SkipFlag } from '@tempo/shared';
 import { requireSession, sideOf, type PipelineDeps } from '../ports.ts';
 import type { CompareState, PipelineInput } from '../state.ts';
 import { isSkipped } from './results.ts';
@@ -37,9 +37,13 @@ export const report = async ({ store, ai, clock }: PipelineDeps, state: CompareS
       scoredBy: comparison.scoredBy,
       baseline: comparison.baseline,
       referenceBand: comparison.referenceBand,
-      flagged: flags.some((flag) => flag.metricId === comparison.metricId && flag.side === comparison.side),
+      flagged: flags.some(
+        (flag) =>
+          flag.kind === 'reliable-change' && flag.metricId === comparison.metricId && flag.side === comparison.side,
+      ),
     }),
   );
+  const attention = flags.filter((flag): flag is SkipFlag => flag.kind !== 'reliable-change');
 
   const { output, meta } = await ai.summarizeSession({
     sessionId,
@@ -60,6 +64,7 @@ export const report = async ({ store, ai, clock }: PipelineDeps, state: CompareS
     patientId: session.patientId,
     generatedAt: clock().toISOString(),
     skipped,
+    attention,
     scores,
     aiItems: state.aiItems,
     aiSummary: { label: 'ai-generated', summary: output.summary, claims: output.claims, ai: meta },

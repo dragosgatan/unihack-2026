@@ -13,13 +13,17 @@ import type {
   Staff,
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
+import { keyOfFlag } from './keys.ts';
 import { storedResults, storedSkips, type StoredSkip } from './submission.ts';
 import type { CodeEntry, MetricValue, Store } from './types.ts';
 
 const seriesKey = (patientId: string, metricId: string, side: Side | undefined): string =>
   `${patientId}|${metricId}|${side ?? 'none'}`;
 
-const flagId = (flag: Flag): string => `${flag.sessionId}|${seriesKey(flag.patientId, flag.metricId, flag.side)}`;
+const flagId = (flag: Flag): string => {
+  const { pk, sk } = keyOfFlag(flag);
+  return `${pk}|${sk}`;
+};
 
 const byTime =<Item extends { t: string }>(a: Item, b: Item): number => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
 
@@ -43,6 +47,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const skips = new Map<string, StoredSkip[]>();
   const flags = new Map<string, Flag>();
   const reports = new Map<string, SessionReport>();
+  const painAlerts = new Set<string>();
 
   const addMetricValues = (values: MetricValue[]): void => {
     for (const value of values) {
@@ -78,6 +83,11 @@ export const createMemoryStore = (seed?: Seed): Store => {
     },
 
     getSession: async (sessionId) => sessions.get(sessionId),
+
+    listPatientSessions: async (patientId) =>
+      [...sessions.values()]
+        .filter((session) => session.patientId === patientId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0)),
 
     putSession: async (session) => {
       sessions.set(session.id, session);
@@ -185,6 +195,16 @@ export const createMemoryStore = (seed?: Seed): Store => {
       const current = sessions.get(sessionId);
       if (!current) throw new Error(`Session ${sessionId} does not exist`);
       sessions.set(sessionId, { ...current, status });
+    },
+
+    claimPainAlert: async (sessionId) => {
+      if (painAlerts.has(sessionId)) return false;
+      painAlerts.add(sessionId);
+      return true;
+    },
+
+    releasePainAlert: async (sessionId) => {
+      painAlerts.delete(sessionId);
     },
 
     putBaseline: async (baseline) => {

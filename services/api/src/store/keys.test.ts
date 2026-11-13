@@ -7,7 +7,9 @@ import {
   flagKey,
   flagPrefix,
   institutionKey,
+  keyOfFlag,
   latestKey,
+  painAlertKey,
   patientIndexKey,
   patientKey,
   planVersionKey,
@@ -18,6 +20,7 @@ import {
   resultKey,
   sessionIndexKey,
   sessionKey,
+  skipFlagKey,
   skipKey,
   skipRange,
   staffIndexKey,
@@ -84,5 +87,21 @@ describe('table keys', () => {
     expect(flag).toEqual({ pk: 'PATIENT#pat-1', sk: 'FLAG#sess-1#finger-tapping.taps-per-second#left' });
     expect(flag.sk.startsWith(flagPrefix('sess-1'))).toBe(true);
     expect(flag.sk.startsWith(flagPrefix('sess-10'))).toBe(false);
+  });
+
+  it('keeps one skip flag per session, kind and activity next to the metric flags', () => {
+    const pain = skipFlagKey('pat-1', 'sess-1', 'pain-skip', 'shoulder-raise');
+    expect(pain).toEqual({ pk: 'PATIENT#pat-1', sk: 'FLAG#sess-1#pain-skip#shoulder-raise' });
+    expect(pain.sk.startsWith(flagPrefix('sess-1'))).toBe(true);
+    expect(skipFlagKey('pat-1', 'sess-1', 'repeated-skip', 'shoulder-raise')).not.toEqual(pain);
+    const base = { id: 'f', patientId: 'pat-1', sessionId: 'sess-1', createdAt: t } as const;
+    expect(keyOfFlag({ ...base, kind: 'pain-skip', activityId: 'shoulder-raise', stage: 'task' })).toEqual(pain);
+    expect(
+      keyOfFlag({ ...base, kind: 'reliable-change', metricId: 'pain.intensity', value: 6, baseline: 3 }),
+    ).toEqual(flagKey('pat-1', 'sess-1', 'pain.intensity', undefined));
+  });
+
+  it('keeps the pain alert marker under the session', () => {
+    expect(painAlertKey('sess-1')).toEqual({ pk: 'SESSION#sess-1', sk: 'PAIN_ALERT' });
   });
 });

@@ -1,4 +1,4 @@
-import type { ActivityId, MetricId, Side } from '@tempo/shared';
+import type { ActivityId, Flag, MetricId, Side, SkipFlag } from '@tempo/shared';
 
 export type Key = { pk: string; sk: string };
 export type IndexKey = { gsi1pk: string; gsi1sk: string };
@@ -70,10 +70,12 @@ export const skipRange = (activityId: ActivityId, from: string, to: string): [st
 ];
 
 export const sessionKey = (sessionId: string): Key => ({ pk: sessionPk(sessionId), sk: meta });
+export const sessionIndexPrefix = 'SESSION#';
 export const sessionIndexKey = (patientId: string, createdAt: string): IndexKey => ({
   gsi1pk: patientPk(patientId),
-  gsi1sk: `SESSION#${createdAt}`,
+  gsi1sk: `${sessionIndexPrefix}${createdAt}`,
 });
+export const painAlertKey = (sessionId: string): Key => ({ pk: sessionPk(sessionId), sk: 'PAIN_ALERT' });
 export const resultPrefix = 'RESULT#';
 export const resultKey = (sessionId: string, index: number): Key => ({
   pk: sessionPk(sessionId),
@@ -87,5 +89,18 @@ export const flagKey = (patientId: string, sessionId: string, metricId: MetricId
   pk: patientPk(patientId),
   sk: `${flagPrefix(sessionId)}${metricId}#${sideKey(side)}`,
 });
+export const skipFlagKey = (
+  patientId: string,
+  sessionId: string,
+  kind: SkipFlag['kind'],
+  activityId: ActivityId,
+): Key => ({
+  pk: patientPk(patientId),
+  sk: `${flagPrefix(sessionId)}${kind}#${activityId}`,
+});
+export const keyOfFlag = (flag: Flag): Key =>
+  flag.kind === 'reliable-change'
+    ? flagKey(flag.patientId, flag.sessionId, flag.metricId, flag.side)
+    : skipFlagKey(flag.patientId, flag.sessionId, flag.kind, flag.activityId);
 
 export const codeKey = (code: string): Key => ({ pk: `CODE#${code}`, sk: meta });

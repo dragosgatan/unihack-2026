@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { routes } from '@tempo/shared';
+import { createMemoryStore } from '../store/memory.ts';
 import { call, expectError } from '../suite/harness.ts';
-import { demoSessionCodes } from './seed/build.ts';
-import { buildTestApp, fingerTappingSubmission } from './testing.ts';
+import { createMockApp } from './app.ts';
+import { buildSeed, demoSessionCodes } from './seed/build.ts';
+import { buildTestApp, fingerTappingSubmission, fixedNow } from './testing.ts';
 
 const redeem = async (app: ReturnType<typeof buildTestApp>, code: string) => {
   const result = await call(app, '/api/device/session-code', { method: 'POST', body: { code } });
@@ -62,6 +64,39 @@ describe('mock demo session codes', () => {
       (await call(app, '/api/patients/pat-1/metrics/finger-tapping.taps-per-second?range=W&side=right')).body,
     );
     expect(series.points.filter((point) => point.t === completedAt)).toEqual([{ t: completedAt, value: 0.2 }]);
+  });
+
+  it('runs the skip rules on submit: status, skip event without a point, pain flag and one alert', async () => {
+    const store = createMemoryStore(buildSeed(fixedNow));
+    const app = createMockApp({ clock: () => fixedNow, store });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const { session, token } = await redeem(app, '333333');
+    const skippedAt = '2026-11-13T11:50:00.000Z';
+    const body = {
+      partial: true,
+      results: [
+        { status: 'skipped', activityId: 'single-leg-squat', reason: 'pain', stage: 'task', skippedAt, painLocation: 'right-knee' },
+      ],
+    };
+    const path = `/api/sessions/${session.id}/submit`;
+    const depth = '/api/patients/pat-3/metrics/single-leg-squat.depth?range=W';
+    const before = routes.getMetricSeries.response.parse((await call(app, depth)).body);
+
+    await call(app, path, { method: 'POST', token, body });
+    expect((await call(app, path, { method: 'POST', token, body })).body).toEqual({
+      sessionId: session.id,
+      status: 'completed-with-skips',
+    });
+
+    const after = routes.getMetricSeries.response.parse((await call(app, depth)).body);
+    expect(after.points).toEqual(before.points);
+    expect(after.events.filter((event) => event.type === 'skip')).toMatchObject([{ t: skippedAt, sessionId: session.id }]);
+    expect(await store.listFlags('pat-3', session.id)).toMatchObject([
+      { kind: 'pain-skip', activityId: 'single-leg-squat', stage: 'task', painLocation: 'right-knee' },
+    ]);
+    const painAlerts = info.mock.calls.filter(([line]) => String(line).includes('stopped because of pain'));
+    expect(painAlerts).toHaveLength(1);
+    info.mockRestore();
   });
 
   it('never hands out a demo code for a new session', async () => {

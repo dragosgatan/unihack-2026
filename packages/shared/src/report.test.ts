@@ -59,11 +59,30 @@ describe('flagSchema', () => {
   it('rejects an unknown kind', () => {
     expect(flagSchema.safeParse({ ...flag, kind: 'bad-day' }).success).toBe(false);
   });
+
+  it('accepts a pain skip and a repeated skip flag', () => {
+    const skipFlag = { patientId: patient.id, sessionId: session.id, activityId: 'shoulder-raise', createdAt: flag.createdAt };
+    const pain = { ...skipFlag, id: `${session.id}:pain-skip:shoulder-raise`, kind: 'pain-skip', stage: 'task' };
+    const repeated = {
+      ...skipFlag,
+      id: `${session.id}:repeated-skip:shoulder-raise`,
+      kind: 'repeated-skip',
+      previousSessionId: 'sess-earlier',
+      reason: 'tired',
+    };
+    expect(flagSchema.safeParse({ ...pain, painLocation: 'right-shoulder' }).success).toBe(true);
+    expect(flagSchema.safeParse(repeated).success).toBe(true);
+    expect(flagSchema.safeParse({ ...repeated, previousSessionId: undefined }).success).toBe(false);
+  });
 });
 
 describe('sessionReportSchema', () => {
   it('accepts a report with a skip, a flagged score and a labelled AI summary', () => {
     expect(sessionReportSchema.safeParse(report).success).toBe(true);
+  });
+
+  it('reads a report stored without attention flags as having none', () => {
+    expect(sessionReportSchema.parse(report).attention).toEqual([]);
   });
 
   it('rejects an AI summary that is not labelled as AI-generated', () => {

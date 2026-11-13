@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { activityIdSchema, skipReasonSchema, skipStageSchema } from './activity.ts';
 import { idSchema, isoDateTimeSchema, sideSchema } from './common.ts';
+import { skipFlagSchema } from './flag.ts';
 import { metricIdSchema, referenceBandSchema } from './metrics.ts';
 import { scoreSchema } from './session.ts';
 import { aiMetaSchema } from './ai.ts';
@@ -45,6 +46,7 @@ export const sessionReportSchema = z.object({
   patientId: idSchema,
   generatedAt: isoDateTimeSchema,
   skipped: z.array(reportSkipSchema),
+  attention: z.array(skipFlagSchema).default([]),
   scores: z.array(reportScoreSchema),
   aiItems: z.array(reportAiItemSchema),
   aiSummary: reportAiSummarySchema,
