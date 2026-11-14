@@ -11,3 +11,5 @@ export { Sheet, type SheetProps } from './Sheet.tsx';
 export { TextArea, type TextAreaProps } from './TextArea.tsx';
 export { TextField, type TextFieldProps } from './TextField.tsx';
 export { Toggle, type ToggleProps } from './Toggle.tsx';
+export { MetricChart, type MetricChartProps } from './chart/MetricChart.tsx';
+export { MetricRangeControl, type MetricRangeControlProps } from './chart/MetricRangeControl.tsx';

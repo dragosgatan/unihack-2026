@@ -1,26 +1,20 @@
 import { useState, type ReactNode } from 'react';
+import type { MetricRange } from '@tempo/shared';
 import { Badge } from './Badge.tsx';
 import { Button } from './Button.tsx';
 import { Card } from './Card.tsx';
 import { EmptyState } from './EmptyState.tsx';
 import { GroupedList, GroupedListRow, type RowTint } from './GroupedList.tsx';
 import { NavShowcase } from './NavShowcase.tsx';
-import { SegmentedControl } from './SegmentedControl.tsx';
 import { Select } from './Select.tsx';
 import { SheetShowcase } from './SheetShowcase.tsx';
 import { TextArea } from './TextArea.tsx';
 import { TextField } from './TextField.tsx';
 import { Toggle } from './Toggle.tsx';
 import { ChevronRightIcon } from './icons.tsx';
-
-type Range = 'W' | 'M' | '6M' | 'Y';
-
-const ranges = [
-  { value: 'W', label: 'W' },
-  { value: 'M', label: 'M' },
-  { value: '6M', label: '6M' },
-  { value: 'Y', label: 'Y' },
-] as const satisfies readonly { value: Range; label: string }[];
+import { MetricChart } from './chart/MetricChart.tsx';
+import { MetricRangeControl } from './chart/MetricRangeControl.tsx';
+import { buildDemoSeries } from './chart/demoSeries.ts';
 
 const swatches = [
   { name: 'grouped', className: 'bg-grouped' },
@@ -88,7 +82,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function Showcase() {
-  const [range, setRange] = useState<Range>('M');
+  const [range, setRange] = useState<MetricRange>('M');
+  const [demoSeries] = useState(() => buildDemoSeries(Date.now()));
   const [reminders, setReminders] = useState(true);
   const [kiosk, setKiosk] = useState(false);
   const [presses, setPresses] = useState(0);
@@ -198,10 +193,12 @@ export function Showcase() {
           </Card>
         </Section>
 
-        <Section title="Segmented control">
+        <Section title="Chart">
           <Card>
-            <SegmentedControl aria-label="Range" options={ranges} value={range} onChange={setRange} />
-            <p className="mt-3 text-subhead text-label-secondary">Selected: {range}</p>
+            <div className="flex flex-col gap-4">
+              <MetricRangeControl value={range} onChange={setRange} />
+              <MetricChart series={demoSeries} range={range} title="Tapping speed" />
+            </div>
           </Card>
         </Section>
 
