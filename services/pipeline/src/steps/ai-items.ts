@@ -15,7 +15,11 @@ export const aiItems = async ({ store, ai }: PipelineDeps, { sessionId }: Pipeli
       updated.push(result);
       continue;
     }
-    const scored = await ai.scoreItem({ activityId: result.raw.activityId, data: result.raw.data });
+    const scored = await ai.scoreItem({
+      activityId: result.raw.activityId,
+      data: result.raw.data,
+      inputRef: `result:${result.id}`,
+    });
     if (!scored) {
       updated.push(result);
       continue;
