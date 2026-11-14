@@ -22,11 +22,33 @@ export interface MetricChartProps {
   formatValue?: (value: number) => string;
   height?: number;
   className?: string;
+  label?: string;
+  compare?: { series: MetricSeries; label: string };
+  target?: { value: number; label: string };
 }
 
 interface PlotPoint {
   t: number;
   value: number;
+  x: number;
+  y: number;
+}
+
+interface PlotLine {
+  points: PlotPoint[];
+  paths: string[];
+  dots: PlotPoint[];
+}
+
+interface PlotSession {
+  t: number;
+  x: number;
+  primary: PlotPoint | null;
+  compare: PlotPoint | null;
+}
+
+interface EndLabel {
+  text: string;
   x: number;
   y: number;
 }
@@ -51,13 +73,32 @@ interface Geometry {
   xTicks: { label: string; x: number; anchor: 'start' | 'middle' }[];
   band: { top: number; bottom: number } | null;
   baselineY: number | null;
+  compare: PlotLine | null;
+  sessions: PlotSession[];
+  target: { y: number; label: string } | null;
+  endLabels: EndLabel[];
 }
 
-interface HeaderText {
+interface HeaderValue {
   caption: string;
   value: string;
   unit: string;
+}
+
+interface HeaderText extends HeaderValue {
   detail: string;
+  second?: HeaderValue;
+}
+
+interface GeometryInput {
+  series: MetricSeries;
+  compare: { series: MetricSeries; label: string } | null;
+  label: string;
+  target: { value: number; label: string } | null;
+  range: MetricRange;
+  domain: TimeDomain;
+  width: number;
+  height: number;
 }
 
 const fallbackWidth = 320;
@@ -67,6 +108,9 @@ const axisGutter = 28;
 const edgeInset = 6;
 const eventSnapPx = 12;
 const minDotSpacingPx = 8;
+const endLabelGapPx = 18;
+const captionCharPx = 6.5;
+const compareDash = '5 4';
 
 const eventTypeLabels: Record<MetricEvent['type'], string> = {
   'medication-change': 'Medication change',
@@ -105,15 +149,61 @@ function round(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function buildGeometry(series: MetricSeries, range: MetricRange, domain: TimeDomain, width: number, height: number): Geometry {
+function visiblePoints(series: MetricSeries, domain: TimeDomain): { t: number; value: number }[] {
+  return series.points
+    .map((point) => ({ t: Date.parse(point.t), value: point.value }))
+    .filter((point) => inDomain(point.t, domain))
+    .sort((a, b) => a.t - b.t);
+}
+
+function plotLine(
+  visible: readonly { t: number; value: number }[],
+  x: (t: number) => number,
+  y: (value: number) => number,
+  skipTimes: readonly number[],
+  plotRight: number,
+): PlotLine {
+  const points = visible.map((point) => ({ ...point, x: x(point.t), y: y(point.value) }));
+  const segments = splitAtGaps(points, skipTimes);
+  const paths = segments
+    .filter((segment) => segment.length > 1)
+    .map((segment) => segment.map((point, index) => `${index === 0 ? 'M' : 'L'}${round(point.x)} ${round(point.y)}`).join(''));
+  const roomForDots = points.length <= (plotRight - edgeInset * 2) / minDotSpacingPx;
+  const dots = roomForDots ? points : segments.filter((segment) => segment.length === 1).flat();
+  return { points, paths, dots };
+}
+
+function unionSessions(primary: readonly PlotPoint[], compare: readonly PlotPoint[]): PlotSession[] {
+  const byTime = new Map<number, PlotSession>();
+  for (const point of primary) byTime.set(point.t, { t: point.t, x: point.x, primary: point, compare: null });
+  for (const point of compare) {
+    const existing = byTime.get(point.t);
+    if (existing) existing.compare = point;
+    else byTime.set(point.t, { t: point.t, x: point.x, primary: null, compare: point });
+  }
+  return [...byTime.values()].sort((a, b) => a.t - b.t);
+}
+
+function endLabels(primary: PlotLine, compare: PlotLine, labels: [string, string], top: number, bottom: number): EndLabel[] {
+  const ends = [primary.points.at(-1), compare.points.at(-1)];
+  const [first, second] = ends;
+  if (!first || !second || Math.abs(first.y - second.y) < endLabelGapPx) return [];
+  const clamp = (value: number) => Math.min(bottom - 4, Math.max(top + 10, value));
+  const fitX = (x: number, text: string) => Math.max(x, text.length * captionCharPx);
+  const firstAbove = first.y < second.y;
+  return [
+    { text: labels[0], x: fitX(first.x, labels[0]), y: clamp(firstAbove ? first.y - 10 : first.y + 18) },
+    { text: labels[1], x: fitX(second.x, labels[1]), y: clamp(firstAbove ? second.y + 18 : second.y - 10) },
+  ];
+}
+
+function buildGeometry({ series, compare, label, target, range, domain, width, height }: GeometryInput): Geometry {
   const plotRight = width - yLabelGutter;
   const plotBottom = height - axisGutter;
   const x = linearScale([domain.start, domain.end], [edgeInset, plotRight - edgeInset]);
 
-  const visible = series.points
-    .map((point) => ({ t: Date.parse(point.t), value: point.value }))
-    .filter((point) => inDomain(point.t, domain))
-    .sort((a, b) => a.t - b.t);
+  const visible = visiblePoints(series, domain);
+  const visibleCompare = compare ? visiblePoints(compare.series, domain) : [];
 
   const events = series.events
     .map((event) => ({ event, t: Date.parse(event.t) }))
@@ -121,27 +211,23 @@ function buildGeometry(series: MetricSeries, range: MetricRange, domain: TimeDom
     .sort((a, b) => a.t - b.t)
     .map((entry) => ({ ...entry, x: x(entry.t) }));
 
-  const extent = visible.map((point) => point.value);
-  if (visible.length > 0) {
-    if (series.baseline !== null) extent.push(series.baseline);
-    if (series.referenceBand) extent.push(series.referenceBand.low, series.referenceBand.high);
+  const extent = [...visible, ...visibleCompare].map((point) => point.value);
+  if (extent.length > 0) {
+    if (!compare && series.baseline !== null) extent.push(series.baseline);
+    if (!compare && series.referenceBand) extent.push(series.referenceBand.low, series.referenceBand.high);
+    if (target) extent.push(target.value);
   }
   const ticks = extent.length > 0 ? niceTicks(Math.min(...extent), Math.max(...extent)) : [];
   const yDomain: [number, number] = [ticks[0] ?? 0, ticks[ticks.length - 1] ?? 1];
   const y = linearScale(yDomain, [plotBottom, plotTop]);
 
-  const points = visible.map((point) => ({ ...point, x: x(point.t), y: y(point.value) }));
   const skipTimes = events.filter((entry) => entry.event.type === 'skip').map((entry) => entry.t);
-  const segments = splitAtGaps(points, skipTimes);
-  const paths = segments
-    .filter((segment) => segment.length > 1)
-    .map((segment) => segment.map((point, index) => `${index === 0 ? 'M' : 'L'}${round(point.x)} ${round(point.y)}`).join(''));
-  const roomForDots = points.length <= (plotRight - edgeInset * 2) / minDotSpacingPx;
-  const dots = roomForDots ? points : segments.filter((segment) => segment.length === 1).flat();
+  const primaryLine = plotLine(visible, x, y, skipTimes, plotRight);
+  const compareLine = compare ? plotLine(visibleCompare, x, y, skipTimes, plotRight) : null;
 
   const showY = ticks.length > 0;
-  const band = showY && series.referenceBand ? { top: y(series.referenceBand.high), bottom: y(series.referenceBand.low) } : null;
-  const baselineY = showY && series.baseline !== null ? y(series.baseline) : null;
+  const band = showY && !compare && series.referenceBand ? { top: y(series.referenceBand.high), bottom: y(series.referenceBand.low) } : null;
+  const baselineY = showY && !compare && series.baseline !== null ? y(series.baseline) : null;
 
   return {
     width,
@@ -149,9 +235,9 @@ function buildGeometry(series: MetricSeries, range: MetricRange, domain: TimeDom
     plotTop,
     plotRight,
     plotBottom,
-    points,
-    paths,
-    dots,
+    points: primaryLine.points,
+    paths: primaryLine.paths,
+    dots: primaryLine.dots,
     events,
     yTicks: ticks.map((value) => ({ value, y: y(value) })),
     xTicks: timeTicks(range, domain).map((tick) => ({
@@ -161,6 +247,10 @@ function buildGeometry(series: MetricSeries, range: MetricRange, domain: TimeDom
     })),
     band,
     baselineY,
+    compare: compareLine,
+    sessions: unionSessions(primaryLine.points, compareLine?.points ?? []),
+    target: showY && target ? { y: y(target.value), label: target.label } : null,
+    endLabels: compare && compareLine ? endLabels(primaryLine, compareLine, [label, compare.label], plotTop, plotBottom) : [],
   };
 }
 
@@ -169,7 +259,9 @@ function crisp(value: number): number {
 }
 
 const StaticLayer = memo(function StaticLayer({ geometry, formatValue }: { geometry: Geometry; formatValue: (value: number) => string }) {
-  const { width, plotTop: top, plotRight, plotBottom, points, paths, dots, events, yTicks, xTicks, band, baselineY } = geometry;
+  const { width, plotTop: top, plotRight, plotBottom, points, paths, dots, events, yTicks, xTicks, band, baselineY, compare, target, endLabels: ends } = geometry;
+  const lineClass = compare ? 'stroke-chart-primary' : 'stroke-accent';
+  const dotClass = compare ? 'fill-chart-primary stroke-surface' : 'fill-accent stroke-surface';
   return (
     <g>
       {band && (
@@ -196,17 +288,36 @@ const StaticLayer = memo(function StaticLayer({ geometry, formatValue }: { geome
           </text>
         </g>
       )}
+      {target && (
+        <g>
+          <line x1={0} x2={plotRight} y1={crisp(target.y)} y2={crisp(target.y)} strokeWidth={1} strokeDasharray="4 3" className="stroke-label-secondary" />
+          <text x={plotRight - 4} y={target.y - 4} textAnchor="end" className="fill-label-secondary text-caption">
+            {target.label}
+          </text>
+        </g>
+      )}
       {events
         .filter((entry) => entry.event.type !== 'skip')
         .map((entry) => (
           <line key={entry.event.id} x1={crisp(entry.x)} x2={crisp(entry.x)} y1={top} y2={plotBottom} strokeWidth={1} className="stroke-separator" />
         ))}
       <line x1={0} x2={plotRight} y1={crisp(plotBottom)} y2={crisp(plotBottom)} strokeWidth={1} className="stroke-separator" />
+      {compare?.paths.map((d) => (
+        <path key={`c-${d}`} d={d} fill="none" strokeWidth={2} strokeDasharray={compareDash} strokeLinejoin="round" strokeLinecap="round" className="stroke-chart-compare" />
+      ))}
+      {compare?.dots.map((point) => (
+        <circle key={`c-${point.t}`} cx={point.x} cy={point.y} r={3.5} strokeWidth={2} className="fill-surface stroke-chart-compare" />
+      ))}
       {paths.map((d) => (
-        <path key={d} d={d} fill="none" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className="stroke-accent" />
+        <path key={d} d={d} fill="none" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" className={lineClass} />
       ))}
       {dots.map((point) => (
-        <circle key={point.t} cx={point.x} cy={point.y} r={4} strokeWidth={2} className="fill-accent stroke-surface" />
+        <circle key={point.t} cx={point.x} cy={point.y} r={4} strokeWidth={2} className={dotClass} />
+      ))}
+      {ends.map((end) => (
+        <text key={end.text} x={end.x} y={end.y} textAnchor="end" className="fill-label-secondary text-caption font-medium">
+          {end.text}
+        </text>
       ))}
       {events.map((entry) =>
         entry.event.type === 'skip' ? (
@@ -235,7 +346,7 @@ const StaticLayer = memo(function StaticLayer({ geometry, formatValue }: { geome
           {tick.label}
         </text>
       ))}
-      {points.length === 0 && (
+      {points.length === 0 && (compare?.points.length ?? 0) === 0 && (
         <text x={plotRight / 2} y={(top + plotBottom) / 2} textAnchor="middle" className="fill-label-secondary text-footnote">
           No data in this range
         </text>
@@ -245,40 +356,106 @@ const StaticLayer = memo(function StaticLayer({ geometry, formatValue }: { geome
   );
 });
 
-export function MetricChart({ series, range, title, formatValue = defaultFormatValue, height = 220, className }: MetricChartProps) {
+function average(points: readonly PlotPoint[]): number | null {
+  if (points.length === 0) return null;
+  return points.reduce((sum, point) => sum + point.value, 0) / points.length;
+}
+
+function LegendSwatch({ dashed }: { dashed: boolean }) {
+  return (
+    <svg width={22} height={10} viewBox="0 0 22 10" aria-hidden="true" className="shrink-0">
+      <line
+        x1={1}
+        x2={21}
+        y1={5}
+        y2={5}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray={dashed ? '4 3' : undefined}
+        className={dashed ? 'stroke-chart-compare' : 'stroke-chart-primary'}
+      />
+      <circle cx={11} cy={5} r={3} strokeWidth={2} className={dashed ? 'fill-surface stroke-chart-compare' : 'fill-chart-primary stroke-chart-primary'} />
+    </svg>
+  );
+}
+
+export function MetricChart({
+  series,
+  range,
+  title,
+  formatValue = defaultFormatValue,
+  height = 220,
+  className,
+  label = 'Value',
+  compare,
+  target,
+}: MetricChartProps) {
   const [containerRef, width] = useContainerWidth(fallbackWidth);
   const [now] = useState(() => Date.now());
+  const compareSeries = compare?.series;
+  const compareLabel = compare?.label;
+  const comparing = compare !== undefined;
 
   const domain = useMemo(() => {
-    const times = [...series.points, ...series.events].map((entry) => Date.parse(entry.t));
+    const times = [...series.points, ...series.events, ...(compareSeries?.points ?? [])].map((entry) => Date.parse(entry.t));
     return timeDomain(range, latestTime(times, now));
-  }, [series, range, now]);
+  }, [series, compareSeries, range, now]);
 
-  const geometry = useMemo(() => buildGeometry(series, range, domain, width, height), [series, range, domain, width, height]);
+  const targetValue = target?.value;
+  const targetLabel = target?.label;
 
-  const average = useMemo(() => {
-    if (geometry.points.length === 0) return null;
-    return geometry.points.reduce((sum, point) => sum + point.value, 0) / geometry.points.length;
-  }, [geometry]);
-
-  const rest = useMemo<HeaderText>(
-    () => ({
-      caption: 'Average',
-      value: average === null ? '—' : formatValue(average),
-      unit: average === null ? '' : series.unit,
-      detail: dateFormat.formatRange(domain.start, domain.end - 1),
-    }),
-    [average, formatValue, series.unit, domain],
+  const geometry = useMemo(
+    () =>
+      buildGeometry({
+        series,
+        compare: compareSeries && compareLabel !== undefined ? { series: compareSeries, label: compareLabel } : null,
+        label,
+        target: targetValue !== undefined && targetLabel !== undefined ? { value: targetValue, label: targetLabel } : null,
+        range,
+        domain,
+        width,
+        height,
+      }),
+    [series, compareSeries, compareLabel, label, targetValue, targetLabel, range, domain, width, height],
   );
+
+  const primaryAverage = useMemo(() => average(geometry.points), [geometry]);
+  const compareAverage = useMemo(() => average(geometry.compare?.points ?? []), [geometry]);
+
+  const rest = useMemo<HeaderText>(() => {
+    const detail = dateFormat.formatRange(domain.start, domain.end - 1);
+    if (!comparing) {
+      return {
+        caption: 'Average',
+        value: primaryAverage === null ? '—' : formatValue(primaryAverage),
+        unit: primaryAverage === null ? '' : series.unit,
+        detail,
+      };
+    }
+    const valueOf = (value: number | null, caption: string): HeaderValue => ({
+      caption,
+      value: value === null ? '—' : formatValue(value),
+      unit: value === null ? '' : series.unit,
+    });
+    return {
+      ...valueOf(primaryAverage, label),
+      second: valueOf(compareAverage, compareLabel ?? ''),
+      detail: `Average · ${detail}`,
+    };
+  }, [comparing, primaryAverage, compareAverage, formatValue, series.unit, domain, label, compareLabel]);
 
   const captionRef = useRef<HTMLSpanElement>(null);
   const valueRef = useRef<HTMLSpanElement>(null);
   const unitRef = useRef<HTMLSpanElement>(null);
+  const secondCaptionRef = useRef<HTMLSpanElement>(null);
+  const secondValueRef = useRef<HTMLSpanElement>(null);
+  const secondUnitRef = useRef<HTMLSpanElement>(null);
   const detailRef = useRef<HTMLSpanElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const overlayRef = useRef<SVGGElement>(null);
   const crosshairRef = useRef<SVGLineElement>(null);
   const dotRef = useRef<SVGCircleElement>(null);
+  const compareDotRef = useRef<SVGCircleElement>(null);
   const rectRef = useRef<DOMRect | null>(null);
   const pressedRef = useRef(false);
   const frameRef = useRef(0);
@@ -286,6 +463,7 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
   const indexRef = useRef<number | null>(null);
 
   const pointXs = useMemo(() => geometry.points.map((point) => point.x), [geometry]);
+  const sessionXs = useMemo(() => geometry.sessions.map((session) => session.x), [geometry]);
   const eventXs = useMemo(() => geometry.events.map((entry) => entry.x), [geometry]);
 
   function writeHeader(text: HeaderText) {
@@ -293,16 +471,15 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
     if (valueRef.current) valueRef.current.textContent = text.value;
     if (unitRef.current) unitRef.current.textContent = text.unit;
     if (detailRef.current) detailRef.current.textContent = text.detail;
+    if (text.second) {
+      if (secondCaptionRef.current) secondCaptionRef.current.textContent = text.second.caption;
+      if (secondValueRef.current) secondValueRef.current.textContent = text.second.value;
+      if (secondUnitRef.current) secondUnitRef.current.textContent = text.second.unit;
+    }
   }
 
-  function moveOverlay(x: number, dot: PlotPoint | null) {
-    const overlay = overlayRef.current;
-    const crosshair = crosshairRef.current;
-    const marker = dotRef.current;
-    if (!overlay || !crosshair || !marker) return;
-    const cx = String(crisp(x));
-    crosshair.setAttribute('x1', cx);
-    crosshair.setAttribute('x2', cx);
+  function placeMarker(marker: SVGCircleElement | null, dot: PlotPoint | null) {
+    if (!marker) return;
     if (dot) {
       marker.setAttribute('cx', String(dot.x));
       marker.setAttribute('cy', String(dot.y));
@@ -310,6 +487,17 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
     } else {
       marker.setAttribute('visibility', 'hidden');
     }
+  }
+
+  function moveOverlay(x: number, dot: PlotPoint | null, compareDot: PlotPoint | null = null) {
+    const overlay = overlayRef.current;
+    const crosshair = crosshairRef.current;
+    if (!overlay || !crosshair) return;
+    const cx = String(crisp(x));
+    crosshair.setAttribute('x1', cx);
+    crosshair.setAttribute('x2', cx);
+    placeMarker(dotRef.current, dot);
+    placeMarker(compareDotRef.current, compareDot);
     overlay.setAttribute('visibility', 'visible');
   }
 
@@ -319,19 +507,39 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
     writeHeader(rest);
   }
 
+  function dateWithEvent(t: number, x: number): string {
+    const nearby = geometry.events[nearestIndex(eventXs, x)];
+    const date = dateFormat.format(t);
+    return nearby && Math.abs(nearby.x - x) <= eventSnapPx ? `${date} · ${eventText(nearby.event)}` : date;
+  }
+
   function showPoint(index: number) {
     const point = geometry.points[index];
     if (!point) return;
     indexRef.current = index;
-    const nearbyIndex = nearestIndex(eventXs, point.x);
-    const nearby = geometry.events[nearbyIndex];
-    const date = dateFormat.format(point.t);
     moveOverlay(point.x, point);
     writeHeader({
       caption: 'Session',
       value: formatValue(point.value),
       unit: series.unit,
-      detail: nearby && Math.abs(nearby.x - point.x) <= eventSnapPx ? `${date} · ${eventText(nearby.event)}` : date,
+      detail: dateWithEvent(point.t, point.x),
+    });
+  }
+
+  function showSession(index: number) {
+    const session = geometry.sessions[index];
+    if (!session) return;
+    indexRef.current = index;
+    moveOverlay(session.x, session.primary, session.compare);
+    const valueOf = (point: PlotPoint | null, caption: string): HeaderValue => ({
+      caption,
+      value: point ? formatValue(point.value) : '—',
+      unit: point ? series.unit : '',
+    });
+    writeHeader({
+      ...valueOf(session.primary, label),
+      second: valueOf(session.compare, compareLabel ?? ''),
+      detail: dateWithEvent(session.t, session.x),
     });
   }
 
@@ -346,6 +554,12 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
   }
 
   function scrubTo(x: number) {
+    if (comparing) {
+      const index = nearestIndex(sessionXs, x);
+      if (index >= 0) showSession(index);
+      else clearScrub();
+      return;
+    }
     const pointIndex = nearestIndex(pointXs, x);
     const point = geometry.points[pointIndex];
     const entry = geometry.events[nearestIndex(eventXs, x)];
@@ -404,7 +618,7 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
   }
 
   function handleKeyDown(event: KeyboardEvent<SVGSVGElement>) {
-    const count = geometry.points.length;
+    const count = comparing ? geometry.sessions.length : geometry.points.length;
     if (event.key === 'Escape') {
       clearScrub();
       return;
@@ -420,7 +634,8 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
         : current === null
           ? count - 1
           : Math.max(0, current - 1);
-    showPoint(next);
+    if (comparing) showSession(next);
+    else showPoint(next);
   }
 
   useLayoutEffect(() => {
@@ -432,37 +647,79 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
   useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
   const tableRows = useMemo(() => {
-    const rows = [
-      ...geometry.points.map((point) => ({ key: `p-${point.t}`, t: point.t, value: `${formatValue(point.value)} ${series.unit}`, note: '' })),
-      ...geometry.events.map((entry) => ({
+    const withUnit = (point: PlotPoint | null) => (point ? `${formatValue(point.value)} ${series.unit}` : '—');
+    const sessionRows = comparing
+      ? geometry.sessions.map((session) => ({ key: `s-${session.t}`, t: session.t, values: [withUnit(session.primary), withUnit(session.compare)], note: '' }))
+      : geometry.points.map((point) => ({ key: `p-${point.t}`, t: point.t, values: [withUnit(point)], note: '' }));
+    const eventRows = geometry.events.map((entry) => {
+      const value = entry.event.type === 'skip' ? 'Skipped' : '';
+      return {
         key: entry.event.id,
         t: entry.t,
-        value: entry.event.type === 'skip' ? 'Skipped' : '',
+        values: comparing ? [value, value] : [value],
         note:
           entry.event.type === 'skip'
             ? `${entry.event.label} (${skipReasonLabels[entry.event.reason]}, stopped at ${entry.event.stage})`
             : `${eventTypeLabels[entry.event.type]}: ${entry.event.label}`,
-      })),
-    ];
-    return rows.sort((a, b) => a.t - b.t);
-  }, [geometry, formatValue, series.unit]);
+      };
+    });
+    return [...sessionRows, ...eventRows].sort((a, b) => a.t - b.t);
+  }, [geometry, comparing, formatValue, series.unit]);
 
-  const summary =
-    average === null
+  const summary = comparing
+    ? geometry.sessions.length === 0
       ? `${title}, no sessions in this range`
-      : `${title}, ${geometry.points.length} sessions, average ${formatValue(average)} ${series.unit}`;
+      : `${title}, ${geometry.sessions.length} sessions, ${label} average ${primaryAverage === null ? 'none' : `${formatValue(primaryAverage)} ${series.unit}`}, ${compareLabel ?? ''} average ${compareAverage === null ? 'none' : `${formatValue(compareAverage)} ${series.unit}`}`
+    : primaryAverage === null
+      ? `${title}, no sessions in this range`
+      : `${title}, ${geometry.points.length} sessions, average ${formatValue(primaryAverage)} ${series.unit}`;
+
+  const columns = comparing ? [label, compareLabel ?? ''] : ['Value'];
 
   return (
     <div className={cx('flex min-w-0 flex-col gap-3', className)}>
       <div className="flex min-w-0 flex-col">
         <h3 className="text-subhead font-semibold text-label">{title}</h3>
-        <span ref={captionRef} className="mt-1 truncate text-caption font-medium text-label-secondary uppercase" />
-        <span className="flex min-w-0 items-baseline gap-1">
-          <span ref={valueRef} className="truncate text-title-1 font-semibold text-label" />
-          <span ref={unitRef} className="shrink-0 text-subhead text-label-secondary" />
-        </span>
+        {comparing ? (
+          <div className="mt-1 grid min-w-0 grid-cols-2 gap-4">
+            <span className="flex min-w-0 flex-col">
+              <span ref={captionRef} className="truncate text-caption font-medium text-label-secondary uppercase" />
+              <span className="flex min-w-0 items-baseline gap-1">
+                <span ref={valueRef} className="truncate text-title-2 font-semibold tabular-nums text-label" />
+                <span ref={unitRef} className="shrink-0 text-subhead text-label-secondary" />
+              </span>
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span ref={secondCaptionRef} className="truncate text-caption font-medium text-label-secondary uppercase" />
+              <span className="flex min-w-0 items-baseline gap-1">
+                <span ref={secondValueRef} className="truncate text-title-2 font-semibold tabular-nums text-label" />
+                <span ref={secondUnitRef} className="shrink-0 text-subhead text-label-secondary" />
+              </span>
+            </span>
+          </div>
+        ) : (
+          <>
+            <span ref={captionRef} className="mt-1 truncate text-caption font-medium text-label-secondary uppercase" />
+            <span className="flex min-w-0 items-baseline gap-1">
+              <span ref={valueRef} className="truncate text-title-1 font-semibold text-label" />
+              <span ref={unitRef} className="shrink-0 text-subhead text-label-secondary" />
+            </span>
+          </>
+        )}
         <span ref={detailRef} className="truncate text-caption text-label-secondary" />
       </div>
+      {comparing && (
+        <ul aria-hidden="true" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-footnote text-label-secondary">
+          <li className="flex items-center gap-1.5">
+            <LegendSwatch dashed={false} />
+            {label}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <LegendSwatch dashed />
+            {compareLabel}
+          </li>
+        </ul>
+      )}
       <div ref={containerRef} className="min-w-0">
         <svg
           ref={svgRef}
@@ -484,7 +741,8 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
           <StaticLayer geometry={geometry} formatValue={formatValue} />
           <g ref={overlayRef} visibility="hidden" pointerEvents="none">
             <line ref={crosshairRef} y1={geometry.plotTop} y2={geometry.plotBottom} strokeWidth={1} className="stroke-label-secondary" />
-            <circle ref={dotRef} r={6} strokeWidth={2} className="fill-accent stroke-surface" />
+            {comparing && <circle ref={compareDotRef} r={5.5} strokeWidth={2.5} className="fill-surface stroke-chart-compare" />}
+            <circle ref={dotRef} r={6} strokeWidth={2} className={comparing ? 'fill-chart-primary stroke-surface' : 'fill-accent stroke-surface'} />
           </g>
         </svg>
       </div>
@@ -494,7 +752,11 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
           <thead>
             <tr>
               <th scope="col">Date</th>
-              <th scope="col">Value</th>
+              {columns.map((column) => (
+                <th key={column} scope="col">
+                  {column}
+                </th>
+              ))}
               <th scope="col">Note</th>
             </tr>
           </thead>
@@ -502,7 +764,9 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
             {tableRows.map((row) => (
               <tr key={row.key}>
                 <td>{dateFormat.format(row.t)}</td>
-                <td>{row.value}</td>
+                {row.values.map((value, index) => (
+                  <td key={columns[index] ?? index}>{value}</td>
+                ))}
                 <td>{row.note}</td>
               </tr>
             ))}

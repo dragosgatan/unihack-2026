@@ -1,4 +1,5 @@
 import type { MetricSeries, SkipEvent, SkipReason, SkipStage } from '@tempo/shared';
+import { unionByTime } from './symmetry.ts';
 
 export const skipReasonLabels: Record<SkipReason, string> = {
   pain: 'It hurts',
@@ -23,5 +24,15 @@ export type SessionRow =
 export function sessionRows(series: MetricSeries): SessionRow[] {
   const results = series.points.map((point, index): SessionRow => ({ kind: 'result', key: `point-${index}-${point.t}`, t: point.t, value: point.value }));
   const skips = series.events.flatMap((event): SessionRow[] => (event.type === 'skip' ? [{ kind: 'skipped', key: event.id, t: event.t, event }] : []));
+  return [...results, ...skips].sort((a, b) => Date.parse(b.t) - Date.parse(a.t));
+}
+
+export type PairedSessionRow =
+  | { kind: 'result'; key: string; t: string; first: number | null; second: number | null }
+  | { kind: 'skipped'; key: string; t: string; event: SkipEvent };
+
+export function pairedSessionRows(first: MetricSeries, second: MetricSeries): PairedSessionRow[] {
+  const results = unionByTime(first.points, second.points).map((row): PairedSessionRow => ({ kind: 'result', key: `pair-${row.t}`, ...row }));
+  const skips = first.events.flatMap((event): PairedSessionRow[] => (event.type === 'skip' ? [{ kind: 'skipped', key: event.id, t: event.t, event }] : []));
   return [...results, ...skips].sort((a, b) => Date.parse(b.t) - Date.parse(a.t));
 }

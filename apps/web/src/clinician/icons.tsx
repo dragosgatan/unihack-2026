@@ -86,3 +86,19 @@ const domainIcons: Record<Domain, ReactNode> = {
 export function DomainIcon({ domain }: { domain: Domain }) {
   return domainIcons[domain];
 }
+
+export function MetIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm4.3 6.3-5.6 5.6-2.9-2.9-1.4 1.4 4.3 4.3 7-7-1.4-1.4Z" />
+    </svg>
+  );
+}
+
+export function NotYetIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}

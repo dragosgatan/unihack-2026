@@ -124,6 +124,7 @@ export function useMetricSeriesList(patientId: string, requests: readonly Series
     queries: requests.map(({ metricId, side }) => ({
       queryKey: queryKeys.metricSeries(patientId, metricId, range, side),
       queryFn: () => fetchSignedIn(queryClient, 'getMetricSeries', { params: { patientId, metricId }, query: { range, side } }),
+      placeholderData: keepPreviousData,
     })),
   });
 }

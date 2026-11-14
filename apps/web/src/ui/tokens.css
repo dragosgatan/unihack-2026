@@ -39,6 +39,9 @@
   --ui-cat-language: #ff2d55;
   --ui-cat-mobility: #a2845e;
 
+  --ui-chart-primary: #077296;
+  --ui-chart-compare: #d4620f;
+
   --ui-bar: rgb(249 249 249 / 0.78);
   --ui-bar-solid: #f9f9f9;
 
@@ -81,6 +84,9 @@
     --ui-cat-motor: #30d158;
     --ui-cat-language: #ff375f;
     --ui-cat-mobility: #ac8e68;
+
+    --ui-chart-primary: #2a9fc0;
+    --ui-chart-compare: #d9772e;
 
     --ui-bar: rgb(28 28 30 / 0.78);
     --ui-bar-solid: #1c1c1e;
@@ -126,6 +132,9 @@
   --color-cat-motor: var(--ui-cat-motor);
   --color-cat-language: var(--ui-cat-language);
   --color-cat-mobility: var(--ui-cat-mobility);
+
+  --color-chart-primary: var(--ui-chart-primary);
+  --color-chart-compare: var(--ui-chart-compare);
 
   --color-bar: var(--ui-bar);
   --color-bar-solid: var(--ui-bar-solid);

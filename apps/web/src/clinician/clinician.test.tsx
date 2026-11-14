@@ -186,7 +186,9 @@ describe('metric detail', () => {
     stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
     const router = renderAt(`/clinician/patients/${patient.id}`);
 
-    fireEvent.click(await screen.findByRole('link', { name: new RegExp(tappingName) }));
+    const pinned = (await screen.findByRole('heading', { level: 2, name: 'Pinned' })).closest('section');
+    if (!pinned) throw new Error('Pinned section missing');
+    fireEvent.click(await within(pinned).findByRole('link', { name: new RegExp(tappingName) }));
 
     expect(await screen.findByRole('heading', { level: 1, name: tappingName })).toBeTruthy();
     expect(router.state.location.pathname).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
@@ -306,6 +308,170 @@ describe('metric detail', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Back' }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Choose a patient' })).toBeTruthy();
     expect(router.state.location.pathname).toBe('/clinician/browse/motor/finger-tapping.taps-per-second');
+  });
+});
+
+const leftTapping: MetricSeries = {
+  ...tapsPerSecondSeries,
+  points: [
+    { t: '2026-09-15T10:00:00.000Z', value: 5 },
+    { t: '2026-11-13T10:20:00.000Z', value: 5.5 },
+  ],
+};
+
+describe('left vs right', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  it('shows both sides with the affected side first, a comparison card and paired sessions', async () => {
+    const fetchMock = stubApi({
+      [`${tappingPath}?range=M&side=right`]: () => json(tapsPerSecondSeries),
+      [`${tappingPath}?range=M&side=left`]: () => json(leftTapping),
+    });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second?side=both`);
+
+    const card = (await screen.findByRole('heading', { level: 3, name: 'Left vs right' })).parentElement?.parentElement;
+    if (!card) throw new Error('Left vs right card missing');
+    expect(card.textContent).toContain('Right (affected)');
+    expect(card.textContent).toContain('Affected side at 80% of the other side');
+    expect(within(screen.getByRole('radiogroup', { name: 'Side' })).getByRole('radio', { name: 'Both' }).getAttribute('aria-checked')).toBe('true');
+    const sides = seriesCalls(fetchMock, tappingPath).map((query) => query.get('side'));
+    expect(sides).toContain('right');
+    expect(sides).toContain('left');
+    const table = screen.getByRole('table', { name: tappingName });
+    expect(Array.from(table.querySelectorAll('th')).map((cell) => cell.textContent)).toEqual(['Date', 'Right (affected)', 'Left', 'Note']);
+    const rows = within(sessionsSection()).getAllByRole('listitem').map((row) => row.textContent);
+    expect(rows).toEqual(['13 Nov 2026L 5.5 taps/s · R 4.4 taps/s', '20 Oct 2026SkippedToo tiredStopped at practice', '15 Sept 2026L 5 taps/s · R 3.9 taps/s']);
+  });
+
+  it('shows the difference and no affected wording when the patient has no affected side', async () => {
+    const noAffected: PatientDetailResponse = { ...patientDetail, record: { ...medicalRecord, affectedLimbs: [] } };
+    stubApi({
+      [`/api/patients/${patient.id}`]: () => json(noAffected),
+      [`${tappingPath}?range=M&side=right`]: () => json(tapsPerSecondSeries),
+      [`${tappingPath}?range=M&side=left`]: () => json(leftTapping),
+    });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second?side=both`);
+
+    const card = (await screen.findByRole('heading', { level: 3, name: 'Left vs right' })).parentElement?.parentElement;
+    expect(card?.textContent).toContain('Difference between sides 1.1 taps/s');
+    expect(card?.textContent).not.toContain('affected');
+  });
+});
+
+const aclPatient = { ...patient, id: 'pat-3', name: 'Andrei Popa', profile: 'sports' as const };
+const aclRecord: PatientDetailResponse['record'] = {
+  ...medicalRecord,
+  patientId: 'pat-3',
+  affectedLimbs: [{ limb: 'leg', side: 'right', prosthesis: false }],
+  injury: {
+    structure: 'Anterior cruciate ligament',
+    side: 'right',
+    dateOfInjury: '2026-07-04',
+    surgery: { date: '2026-07-20', type: 'ACL reconstruction' },
+    rehabPhase: {
+      name: 'Strength and neuromuscular control',
+      enteredAt: '2026-10-17',
+      targets: [
+        { label: 'Full knee extension', met: true },
+        { label: 'Single-leg squat symmetry above 90%', met: false },
+      ],
+    },
+    phaseHistory: [
+      {
+        name: 'Early rehabilitation',
+        enteredAt: '2026-08-08',
+        completedAt: '2026-10-17',
+        targets: [
+          { label: 'Walking without crutches', met: true },
+          { label: 'Knee flexion to 120°', met: true },
+          { label: 'Straight-leg raise without lag', met: false },
+        ],
+        decidedBy: 'stf-2',
+      },
+    ],
+  },
+};
+const aclMetrics: PatientMetricsResponse = {
+  metrics: [
+    { metricId: 'single-leg-squat.depth', unit: '%', lateral: true, lastValue: 52, lastT: '2026-11-11T15:00:00.000Z' },
+    { metricId: 'single-leg-squat.knee-valgus', unit: '°', lateral: true, lastValue: 6, lastT: '2026-11-11T15:00:00.000Z' },
+    { metricId: 'single-leg-squat.symmetry', unit: '%', lateral: false, lastValue: 85, lastT: '2026-11-11T15:00:00.000Z' },
+  ],
+};
+const squatSeries = (metricId: MetricSeries['metricId'], unit: string, value: number): MetricSeries => ({
+  metricId,
+  unit,
+  points: [{ t: '2026-11-11T15:00:00.000Z', value }],
+  baseline: null,
+  referenceBand: null,
+  events: [],
+});
+const aclPath = '/api/patients/pat-3';
+
+function aclApi() {
+  return stubApi({
+    [aclPath]: () => json({ patient: aclPatient, record: aclRecord, plan: null }),
+    [`${aclPath}/metrics`]: () => json(aclMetrics),
+    [`${aclPath}/metrics/single-leg-squat.depth?range=M&side=right`]: () => json(squatSeries('single-leg-squat.depth', '%', 52)),
+    [`${aclPath}/metrics/single-leg-squat.depth?range=M&side=left`]: () => json(squatSeries('single-leg-squat.depth', '%', 61)),
+    [`${aclPath}/metrics/single-leg-squat.knee-valgus?range=M&side=right`]: () => json(squatSeries('single-leg-squat.knee-valgus', '°', 6)),
+    [`${aclPath}/metrics/single-leg-squat.knee-valgus?range=M&side=left`]: () => json(squatSeries('single-leg-squat.knee-valgus', '°', 3)),
+    [`${aclPath}/metrics/single-leg-squat.symmetry?range=M`]: () => json(squatSeries('single-leg-squat.symmetry', '%', 85)),
+  });
+}
+
+describe('limb symmetry', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  it('shows the injury, the symmetry chart with its target, both sides per metric and the phase checklist', async () => {
+    aclApi();
+    renderAt('/clinician/patients/pat-3/symmetry');
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Limb symmetry' })).toBeTruthy();
+    expect(await screen.findByText('Right anterior cruciate ligament')).toBeTruthy();
+    expect(screen.getByText('Weeks since surgery')).toBeTruthy();
+    expect(screen.getByText('Strength and neuromuscular control', { selector: 'dd' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Limb symmetry' })).toBeTruthy();
+    expect(screen.getByText('90%')).toBeTruthy();
+    expect(screen.getByText('From single-leg squat symmetry')).toBeTruthy();
+
+    const comparison = screen.getByRole('heading', { level: 2, name: 'Left vs right' }).closest('section');
+    if (!comparison) throw new Error('Left vs right list missing');
+    const depth = within(comparison).getByRole('link', { name: new RegExp(metricNames['single-leg-squat.depth']) });
+    expect(depth.getAttribute('href')).toBe('/clinician/patients/pat-3/metrics/single-leg-squat.depth?side=both');
+    expect(depth.textContent).toContain('R 52 % · L 61 %');
+    expect(depth.textContent).toContain('Symmetry 85.2%');
+    expect(within(comparison).getByRole('link', { name: new RegExp(metricNames['single-leg-squat.knee-valgus']) }).textContent).toContain('Difference 3 °');
+
+    const phase = screen.getByRole('heading', { level: 3, name: 'Rehab phase' }).parentElement?.parentElement;
+    expect(phase?.textContent).toContain('Full knee extensionMet');
+    expect(phase?.textContent).toContain('Single-leg squat symmetry above 90%Not yet');
+    expect(phase?.textContent).toContain('The therapist decides when to move to the next phase.');
+    expect(phase?.querySelector('button')).toBeNull();
+
+    const completed = screen.getByRole('heading', { level: 2, name: 'Completed phases' }).closest('section');
+    expect(completed?.textContent).toContain('2 of 3 targets met');
+  });
+
+  it('links to the screen from the patient with the latest symmetry value', async () => {
+    aclApi();
+    renderAt('/clinician/patients/pat-3');
+
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Limb symmetry' })).closest('section');
+    if (!section) throw new Error('Limb symmetry section missing');
+    const card = await within(section).findByRole('link', { name: /85%/ });
+    expect(card.getAttribute('href')).toBe('/clinician/patients/pat-3/symmetry');
+    expect(card.textContent).toContain(metricNames['single-leg-squat.symmetry']);
+  });
+
+  it('shows an empty state for a patient with no affected side', async () => {
+    stubApi({ [`/api/patients/${patient.id}`]: () => json({ ...patientDetail, record: { ...medicalRecord, affectedLimbs: [] } }) });
+    renderAt(`/clinician/patients/${patient.id}/symmetry`);
+    expect(await screen.findByText('No limb symmetry')).toBeTruthy();
   });
 });
 

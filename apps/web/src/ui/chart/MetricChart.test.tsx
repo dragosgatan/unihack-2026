@@ -77,3 +77,73 @@ describe('MetricChart', () => {
     expect(header()).toContain('Average');
   });
 });
+
+const right: MetricSeries = {
+  metricId: 'single-leg-squat.depth',
+  unit: '%',
+  points: [
+    { t: '2026-11-03T10:00:00.000Z', value: 40 },
+    { t: '2026-11-10T10:00:00.000Z', value: 50 },
+  ],
+  baseline: 45,
+  referenceBand: { low: 40, high: 50 },
+  events: [],
+};
+
+const left: MetricSeries = {
+  ...right,
+  points: [
+    { t: '2026-11-03T10:00:00.000Z', value: 60 },
+    { t: '2026-11-07T10:00:00.000Z', value: 62 },
+    { t: '2026-11-10T10:00:00.000Z', value: 64 },
+  ],
+};
+
+function depthHeader() {
+  return screen.getByRole('heading', { name: 'Squat depth' }).parentElement?.textContent ?? '';
+}
+
+describe('MetricChart compare mode', () => {
+  it('draws two lines with a legend and no band or baseline', () => {
+    const { container } = render(<MetricChart series={right} label="Right" compare={{ series: left, label: 'Left' }} range="M" title="Squat depth" />);
+    expect(container.querySelectorAll('path')).toHaveLength(2);
+    expect(container.querySelectorAll('path[stroke-dasharray]')).toHaveLength(1);
+    const legend = container.querySelector('ul');
+    expect(legend?.textContent).toBe('RightLeft');
+    expect(screen.queryByText('own range')).toBeNull();
+    expect(screen.queryByText('baseline')).toBeNull();
+  });
+
+  it('shows both averages at rest and both values for a session while stepping', () => {
+    render(<MetricChart series={right} label="Right" compare={{ series: left, label: 'Left' }} range="M" title="Squat depth" />);
+    expect(depthHeader()).toContain('Right45%');
+    expect(depthHeader()).toContain('Left62%');
+    const plot = screen.getByRole('group');
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    expect(depthHeader()).toContain('Right40%');
+    expect(depthHeader()).toContain('Left60%');
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    expect(depthHeader()).toContain('Right—');
+    expect(depthHeader()).toContain('Left62%');
+    expect(depthHeader()).toContain('7 Nov 2026');
+  });
+
+  it('gives each side a column in the hidden table', () => {
+    render(<MetricChart series={right} label="Right" compare={{ series: left, label: 'Left' }} range="M" title="Squat depth" />);
+    const table = screen.getByRole('table', { name: 'Squat depth' });
+    const headers = Array.from(table.querySelectorAll('th')).map((cell) => cell.textContent);
+    expect(headers).toEqual(['Date', 'Right', 'Left', 'Note']);
+    expect(table.textContent).toContain('40 %60 %');
+    expect(table.textContent).toContain('—62 %');
+  });
+});
+
+describe('MetricChart target', () => {
+  it('draws a dashed target line with its label and stretches the axis to reach it', () => {
+    const { container } = render(<MetricChart series={right} target={{ value: 90, label: '90%' }} range="M" title="Squat depth" />);
+    expect(screen.getByText('90%')).toBeTruthy();
+    expect(container.querySelectorAll('line[stroke-dasharray]')).toHaveLength(1);
+    const tickLabels = Array.from(container.querySelectorAll('text')).map((node) => node.textContent);
+    expect(tickLabels).toContain('90');
+  });
+});

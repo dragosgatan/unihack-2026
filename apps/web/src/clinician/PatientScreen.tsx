@@ -1,12 +1,14 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router';
-import type { AffectedLimb, PatientDetailResponse, PatientMetric } from '@tempo/shared';
-import { Card, EmptyState, LargeTitle } from '../ui/index.ts';
+import type { AffectedLimb, MedicalRecord, PatientDetailResponse, PatientMetric } from '@tempo/shared';
+import { Card, EmptyState, LargeTitle, MiniChart } from '../ui/index.ts';
 import { usePatient, usePatientMetrics } from './api.ts';
 import { Highlights } from './Highlights.tsx';
 import { ageFrom, formatNumber, formatShortDate, formatUnit, profileLabels, sexLabels } from './format.ts';
 import { metricNames } from './metricNames.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
+import { useSymmetrySeries } from './useSymmetrySeries.ts';
+import { latestPoint } from './symmetry.ts';
 
 const sideLabels = { left: 'Left', right: 'Right' } as const;
 
@@ -88,6 +90,49 @@ function PinnedMetrics({ patientId }: { patientId: string }) {
   );
 }
 
+function LimbSymmetryCard({ patientId, record, metrics }: { patientId: string; record: MedicalRecord; metrics: readonly PatientMetric[] }) {
+  const symmetry = useSymmetrySeries(patientId, record, metrics, 'M');
+  const [now] = useState(() => Date.now());
+
+  if (!symmetry.applies) return null;
+
+  let body: ReactNode;
+  if (symmetry.pending) body = <LoadingSkeleton rows={1} />;
+  else if (symmetry.failed) body = <LoadError onRetry={symmetry.retry} />;
+  else if (symmetry.value) {
+    const latest = latestPoint(symmetry.value.series.points);
+    body = (
+      <Card href={`/clinician/patients/${patientId}/symmetry`} className="max-w-3xl">
+        <p className="flex flex-wrap items-baseline gap-x-1">
+          <span className="text-title-1 font-semibold tabular-nums">{latest ? `${formatNumber(latest.value)}%` : '—'}</span>
+          {latest && <span className="text-footnote text-label-secondary">{formatShortDate(latest.t)}</span>}
+        </p>
+        <p className="text-subhead text-label-secondary">{symmetry.value.measure}</p>
+        <MiniChart series={symmetry.value.series} now={now} className="mt-3" />
+      </Card>
+    );
+  } else {
+    body = (
+      <Card href={`/clinician/patients/${patientId}/symmetry`} className="max-w-3xl">
+        <p className="text-subhead text-label-secondary">Left and right results, rehab phase and criteria</p>
+      </Card>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-title-3 font-semibold">Limb symmetry</h2>
+      {body}
+    </section>
+  );
+}
+
+function LimbSymmetry({ patientId, record }: { patientId: string; record: MedicalRecord }) {
+  const metrics = usePatientMetrics(patientId);
+  if (!metrics.isSuccess) return null;
+  return <LimbSymmetryCard patientId={patientId} record={record} metrics={metrics.data.metrics} />;
+}
+
 function PatientBody({ patientId }: { patientId: string }) {
   const patient = usePatient(patientId);
 
@@ -106,6 +151,7 @@ function PatientBody({ patientId }: { patientId: string }) {
               <h2 className="text-title-3 font-semibold">Pinned</h2>
               <PinnedMetrics patientId={patientId} />
             </section>
+            <LimbSymmetry patientId={patientId} record={patient.data.record} />
             <Highlights patientId={patientId} record={patient.data.record} />
           </>
         )}
