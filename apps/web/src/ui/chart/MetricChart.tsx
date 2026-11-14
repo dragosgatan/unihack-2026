@@ -13,6 +13,7 @@ import {
   timeTicks,
   type TimeDomain,
 } from './scale.ts';
+import { useContainerWidth } from './useContainerWidth.ts';
 
 export interface MetricChartProps {
   series: MetricSeries;
@@ -244,24 +245,8 @@ const StaticLayer = memo(function StaticLayer({ geometry, formatValue }: { geome
   );
 });
 
-function useContainerWidth() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(fallbackWidth);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => {
-      const next = element.clientWidth;
-      if (next > 0) setWidth(next);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
-
 export function MetricChart({ series, range, title, formatValue = defaultFormatValue, height = 220, className }: MetricChartProps) {
-  const [containerRef, width] = useContainerWidth();
+  const [containerRef, width] = useContainerWidth(fallbackWidth);
   const [now] = useState(() => Date.now());
 
   const domain = useMemo(() => {

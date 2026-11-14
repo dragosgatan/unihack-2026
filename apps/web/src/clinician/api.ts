@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiErrorSchema, routes, type MetricId, type MetricRange, type RouteName, type Side } from '@tempo/shared';
 import { getToken, signOut } from './auth.ts';
 
@@ -68,21 +68,23 @@ interface ApiQueryOptions {
   placeholderData?: typeof keepPreviousData;
 }
 
+async function fetchSignedIn<N extends StaffGetRoute>(queryClient: QueryClient, name: N, input: RouteInput<N>): Promise<RouteResponse<N>> {
+  const token = getToken();
+  if (token === null) throw new ApiRequestError(401, 'unauthenticated', 'Not signed in');
+  try {
+    return await apiFetch(name, input, token);
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 401) signOut(queryClient);
+    throw error;
+  }
+}
+
 function useApiQuery<N extends StaffGetRoute>(queryKey: readonly unknown[], name: N, input: RouteInput<N>, options: ApiQueryOptions = {}) {
   const queryClient = useQueryClient();
   return useQuery({
     ...options,
     queryKey,
-    queryFn: async () => {
-      const token = getToken();
-      if (token === null) throw new ApiRequestError(401, 'unauthenticated', 'Not signed in');
-      try {
-        return await apiFetch(name, input, token);
-      } catch (error) {
-        if (error instanceof ApiRequestError && error.status === 401) signOut(queryClient);
-        throw error;
-      }
-    },
+    queryFn: () => fetchSignedIn(queryClient, name, input),
   });
 }
 
@@ -109,4 +111,19 @@ export function useMetricSeries(patientId: string, metricId: MetricId, range: Me
     { params: { patientId, metricId }, query: { range, side } },
     { placeholderData: keepPreviousData },
   );
+}
+
+export interface SeriesRequest {
+  metricId: MetricId;
+  side: Side | undefined;
+}
+
+export function useMetricSeriesList(patientId: string, requests: readonly SeriesRequest[], range: MetricRange) {
+  const queryClient = useQueryClient();
+  return useQueries({
+    queries: requests.map(({ metricId, side }) => ({
+      queryKey: queryKeys.metricSeries(patientId, metricId, range, side),
+      queryFn: () => fetchSignedIn(queryClient, 'getMetricSeries', { params: { patientId, metricId }, query: { range, side } }),
+    })),
+  });
 }

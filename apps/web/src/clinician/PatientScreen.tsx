@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import type { AffectedLimb, PatientDetailResponse, PatientMetric } from '@tempo/shared';
 import { Card, EmptyState, LargeTitle } from '../ui/index.ts';
 import { usePatient, usePatientMetrics } from './api.ts';
+import { Highlights } from './Highlights.tsx';
 import { ageFrom, formatNumber, formatShortDate, formatUnit, profileLabels, sexLabels } from './format.ts';
 import { metricNames } from './metricNames.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
@@ -105,6 +106,7 @@ function PatientBody({ patientId }: { patientId: string }) {
               <h2 className="text-title-3 font-semibold">Pinned</h2>
               <PinnedMetrics patientId={patientId} />
             </section>
+            <Highlights patientId={patientId} record={patient.data.record} />
           </>
         )}
       </div>

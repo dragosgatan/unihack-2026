@@ -5,7 +5,6 @@ import {
   metricIdSchema,
   metricRangeSchema,
   sideSchema,
-  type MedicalRecord,
   type MetricId,
   type MetricRange,
   type MetricSeries,
@@ -15,7 +14,7 @@ import { Badge, Card, EmptyState, GroupedList, GroupedListRow, LargeTitle, Metri
 import { aboutTests, directionSentence } from './aboutTests.ts';
 import { useMetricSeries, usePatient } from './api.ts';
 import { metricDomains } from './domains.ts';
-import { formatDate, formatNumber, formatUnit } from './format.ts';
+import { defaultSide, formatDate, formatNumber, formatUnit, withUnit } from './format.ts';
 import { metricNames } from './metricNames.ts';
 import { sessionRows, skipReasonLabels, skipStageLabels, type SessionRow } from './sessions.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
@@ -24,15 +23,6 @@ const sideOptions: readonly SegmentedOption<Side>[] = [
   { value: 'left', label: 'Left' },
   { value: 'right', label: 'Right' },
 ];
-
-function defaultSide(record: MedicalRecord): Side {
-  return record.injury?.side ?? record.affectedLimbs[0]?.side ?? record.dominantHand;
-}
-
-function withUnit(value: number, unit: string): string {
-  const label = formatUnit(unit);
-  return label ? `${formatNumber(value)} ${label}` : formatNumber(value);
-}
 
 function AboutCard({ metricId }: { metricId: MetricId }) {
   const about = aboutTests[metricDefinitions[metricId].activityId];

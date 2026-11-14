@@ -1,4 +1,4 @@
-import type { Profile, Sex } from '@tempo/shared';
+import type { MedicalRecord, Profile, Sex, Side } from '@tempo/shared';
 
 export const profileLabels: Record<Profile, string> = {
   neurological: 'Neurological / elderly',
@@ -47,6 +47,15 @@ export function formatUnit(unit: string): string {
   return unitLabels[unit] ?? unit;
 }
 
+export function withUnit(value: number, unit: string): string {
+  const label = formatUnit(unit);
+  return label ? `${formatNumber(value)} ${label}` : formatNumber(value);
+}
+
 export function normalizeForSearch(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+export function defaultSide(record: MedicalRecord): Side {
+  return record.injury?.side ?? record.affectedLimbs[0]?.side ?? record.dominantHand;
 }

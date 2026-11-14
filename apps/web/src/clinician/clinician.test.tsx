@@ -248,6 +248,33 @@ describe('metric detail', () => {
     expect(screen.getByText('No data in this range')).toBeTruthy();
   });
 
+  it('shows a highlight with a sentence for a metric below its usual range, even when another series fails', async () => {
+    const recent = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+    const lowTapping: MetricSeries = {
+      ...tapsPerSecondSeries,
+      points: [
+        { t: recent(6), value: 3 },
+        { t: recent(2), value: 3.1 },
+      ],
+      events: [],
+    };
+    stubApi({ [tappingPath]: () => json(lowTapping) });
+    renderAt(`/clinician/patients/${patient.id}`);
+
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Highlights' })).closest('section');
+    if (!section) throw new Error('Highlights section missing');
+    const sentence = "Finger tapping speed was below the patient's usual range in the last 2 sessions.";
+    const card = await within(section).findByRole('link', { name: new RegExp(sentence) });
+    expect(card.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    expect(within(section).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('shows No highlights yet when nothing stands out', async () => {
+    stubApi({ [tappingPath]: () => json({ ...tapsPerSecondSeries, points: [], events: [] }) });
+    renderAt(`/clinician/patients/${patient.id}`);
+    expect(await screen.findByText('No highlights yet')).toBeTruthy();
+  });
+
   it('shows Try again when the series fails and refetches on tap', async () => {
     let calls = 0;
     stubApi({ [tappingPath]: () => (++calls === 1 ? json({ error: { code: 'internal', message: 'Boom' } }, 500) : json(tapsPerSecondSeries)) });
