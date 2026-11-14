@@ -17,6 +17,7 @@ export const aiItems = async ({ store, ai }: PipelineDeps, { sessionId }: Pipeli
     }
     const scored = await ai.scoreItem({
       activityId: result.raw.activityId,
+      sessionId,
       data: result.raw.data,
       inputRef: `result:${result.id}`,
     });

@@ -140,7 +140,7 @@ const recordingProvider = () => {
 const flaggedSession = async (flags: Flag[] = [reliableChange()]) => {
   const context = await fixture();
   const { provider, requests } = recordingProvider();
-  context.deps.ai = createPipelineAi(createAi({ provider, now: () => now }));
+  context.deps.ai = createPipelineAi(createAi({ provider, now: () => now }), context.recordings);
   await context.store.putRecord(record);
   await submit(context.store, 'sess-1', []);
   await context.store.putFlags(flags);

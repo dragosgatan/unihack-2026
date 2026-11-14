@@ -59,7 +59,8 @@ const stripUnsupported = (node: unknown): unknown => {
 };
 
 // Free-tier quotas are counted per model, so a busy model hands over to the next one. A voice turn has to answer in about a second, which the lite models do and gemini-3.8-flash does not, so the assistant starts from the small end.
-export const geminiModelsFor = (task: AiTask): ModelChain => (task === 'assistant' ? assistantModels : pipelineModels);
+const liteFirstTasks: ReadonlySet<AiTask> = new Set<AiTask>(['assistant', 'speech']);
+export const geminiModelsFor = (task: AiTask): ModelChain => (liteFirstTasks.has(task) ? assistantModels : pipelineModels);
 
 const outputFormat = (request: AiRequest) =>
   'tools' in request

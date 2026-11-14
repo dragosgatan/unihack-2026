@@ -1,9 +1,10 @@
 import { inflateSync } from 'node:zlib';
-import type { ClockDrawingRawResult } from '@tempo/shared';
+import type { ClockDrawingRawResult, WordRecallRawResult } from '@tempo/shared';
 import { describe, expect, it } from 'vitest';
 import { createAi, createMockProvider, type AiProvider, type AiRequest } from './ai/index.ts';
 import { createPipelineAi } from './ai-port.ts';
 import { clockDrawingPng } from './clock-image.ts';
+import { createMemoryRecordingFiles, recordingKey } from './recording-files.ts';
 
 const size = 64;
 
@@ -64,12 +65,14 @@ describe('scoreItem', () => {
         return mock.generate(request);
       },
     };
-    return { requests, ai: createPipelineAi(createAi({ provider, now: () => new Date('2026-11-14T10:00:00.000Z') })) };
+    const recordings = createMemoryRecordingFiles();
+    const ai = createPipelineAi(createAi({ provider, now: () => new Date('2026-11-14T10:00:00.000Z') }), recordings);
+    return { requests, recordings, ai };
   };
 
   it('sends the drawing as a PNG with the target time and maps the total to the clock score', async () => {
     const { requests, ai } = recording();
-    const scored = await ai.scoreItem({ activityId: 'clock-drawing', data: raw, inputRef: 'result:res-1' });
+    const scored = await ai.scoreItem({ activityId: 'clock-drawing', sessionId: 'sess-1', data: raw, inputRef: 'result:res-1' });
 
     expect(scored?.output).toEqual({ scores: [{ metricId: 'clock-drawing.score', value: 2 }] });
     expect(scored?.meta.inputRef).toBe('result:res-1');
@@ -81,14 +84,60 @@ describe('scoreItem', () => {
 
   it('leaves a blank drawing to the clinician without calling the model', async () => {
     const { requests, ai } = recording();
-    expect(await ai.scoreItem({ activityId: 'clock-drawing', data: { ...raw, strokes: [] }, inputRef: 'r' })).toBeUndefined();
+    expect(await ai.scoreItem({ activityId: 'clock-drawing', sessionId: 's', data: { ...raw, strokes: [] }, inputRef: 'r' })).toBeUndefined();
     expect(requests).toHaveLength(0);
   });
 
   it('does not score data that is not a clock drawing, or other activities', async () => {
     const { requests, ai } = recording();
-    expect(await ai.scoreItem({ activityId: 'clock-drawing', data: { taps: [] }, inputRef: 'r' })).toBeUndefined();
-    expect(await ai.scoreItem({ activityId: 'word-recall', data: raw, inputRef: 'r' })).toBeUndefined();
+    expect(await ai.scoreItem({ activityId: 'clock-drawing', sessionId: 's', data: { taps: [] }, inputRef: 'r' })).toBeUndefined();
+    expect(await ai.scoreItem({ activityId: 'finger-tapping', sessionId: 's', data: raw, inputRef: 'r' })).toBeUndefined();
+    expect(requests).toHaveLength(0);
+  });
+
+  const words: WordRecallRawResult = {
+    part: 'immediate',
+    language: 'en',
+    words: ['apple', 'river', 'chair', 'garden', 'candle'],
+    presentedAt: '2026-11-14T09:58:00.000Z',
+    recording: { id: '0b6c2f1e-8a43-4f3e-9d61-2c7d5b8e4a10', mimeType: 'audio/webm;codecs=opus', durationMs: 9000, bytes: 4 },
+  };
+  const audio = new Uint8Array([1, 2, 3, 4]);
+
+  it('transcribes the stored recording with its mime type and counts the list words heard', async () => {
+    const { requests, recordings, ai } = recording();
+    await recordings.put(recordingKey('sess-1', words.recording.id), { mimeType: 'audio/mp4', bytes: audio });
+
+    const scored = await ai.scoreItem({ activityId: 'word-recall', sessionId: 'sess-1', data: words, inputRef: 'result:res-2' });
+
+    expect(scored?.output).toEqual({ scores: [{ metricId: 'word-recall.immediate', value: 4 }] });
+    expect(scored?.meta).toMatchObject({ inputRef: 'result:res-2', promptVersion: 'speech-1' });
+    expect(requests).toHaveLength(1);
+    const [text, sound] = requests[0]?.parts ?? [];
+    expect(text && 'text' in text ? text.text : '').toContain('English');
+    expect(sound).toEqual({ mimeType: 'audio/mp4', data: audio });
+  });
+
+  it('scores a delayed recall on its own metric', async () => {
+    const { recordings, ai } = recording();
+    await recordings.put(recordingKey('sess-1', words.recording.id), { mimeType: 'audio/mp4', bytes: audio });
+    const delayed = { ...words, part: 'delayed' };
+    const scored = await ai.scoreItem({ activityId: 'word-recall', sessionId: 'sess-1', data: delayed, inputRef: 'r' });
+    expect(scored?.output).toEqual({ scores: [{ metricId: 'word-recall.delayed', value: 4 }] });
+  });
+
+  it('leaves a missing or empty recording to the clinician without calling the model', async () => {
+    const { requests, recordings, ai } = recording();
+    await recordings.put(recordingKey('sess-1', words.recording.id), { mimeType: 'audio/mp4', bytes: audio });
+    expect(await ai.scoreItem({ activityId: 'word-recall', sessionId: 'sess-2', data: words, inputRef: 'r' })).toBeUndefined();
+    await recordings.put(recordingKey('sess-3', words.recording.id), { mimeType: 'audio/mp4', bytes: new Uint8Array() });
+    expect(await ai.scoreItem({ activityId: 'word-recall', sessionId: 'sess-3', data: words, inputRef: 'r' })).toBeUndefined();
+    expect(requests).toHaveLength(0);
+  });
+
+  it('does not score data that is not a word recall', async () => {
+    const { requests, ai } = recording();
+    expect(await ai.scoreItem({ activityId: 'word-recall', sessionId: 'sess-1', data: raw, inputRef: 'r' })).toBeUndefined();
     expect(requests).toHaveLength(0);
   });
 });

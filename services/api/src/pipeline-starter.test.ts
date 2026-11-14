@@ -1,5 +1,5 @@
 import { ExecutionAlreadyExists, SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
-import { createAi, createMemoryReportFiles, createMockProvider } from '@tempo/pipeline';
+import { createAi, createMemoryRecordingFiles, createMemoryReportFiles, createMockProvider } from '@tempo/pipeline';
 import { routes } from '@tempo/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockStaffAuth } from './auth/staff.ts';
@@ -58,6 +58,7 @@ describe('session submit', () => {
       ai: createAi({ provider: createMockProvider() }),
       demoSessionCodes,
       reportFiles: createMemoryReportFiles(),
+      recordings: createMemoryRecordingFiles(),
     });
     const redeemed = routes.redeemSessionCode.response.parse(
       (await call(app, '/api/device/session-code', { method: 'POST', body: { code: '222222' } })).body,

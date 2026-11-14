@@ -59,6 +59,12 @@ export type SendEmail = (email: Email) => Promise<void>;
 
 export type ReportFiles = { put(key: string, pdf: Uint8Array): Promise<void> };
 
+export type RecordingFile = { mimeType: string; bytes: Uint8Array };
+
+export type RecordingReader = { get(key: string): Promise<RecordingFile | undefined> };
+
+export type RecordingWriter = { put(key: string, file: RecordingFile): Promise<void> };
+
 export type PipelineDeps = {
   store: PipelineStore;
   ai: PipelineAi;

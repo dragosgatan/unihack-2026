@@ -83,6 +83,12 @@ export class Pipeline extends Construct {
           new PolicyStatement({ actions: ['s3:PutObject'], resources: [props.uploads.arnForObjects('reports/*')] }),
         );
       }
+      if (stepId === 'AiItems') {
+        handler.addToRolePolicy(
+          new PolicyStatement({ actions: ['s3:GetObject'], resources: [props.uploads.arnForObjects('recordings/*')] }),
+        );
+        handler.addToRolePolicy(new PolicyStatement({ actions: ['s3:ListBucket'], resources: [props.uploads.bucketArn] }));
+      }
       if (sender) {
         handler.addToRolePolicy(
           new PolicyStatement({

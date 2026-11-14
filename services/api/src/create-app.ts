@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import { createReportLink, type Ai } from '@tempo/pipeline';
+import { createReportLink, recordingKey, type Ai, type RecordingWriter } from '@tempo/pipeline';
 import {
   reportLinkParamsSchema,
   reportLinkPath,
@@ -57,6 +57,7 @@ export type AppOptions = {
   ai: Pick<Ai, 'assistantTurn'>;
   demoSessionCodes?: ReadonlyMap<string, string>;
   reportFiles: ReportFileOpener;
+  recordings: RecordingWriter;
 };
 
 type AssistantCaller = { role: AssistantRole; id: string; institutionId: string };
@@ -75,6 +76,7 @@ export const createApp = ({
   ai,
   demoSessionCodes = new Map(),
   reportFiles,
+  recordings,
 }: AppOptions): Hono => {
   const app = new Hono();
   app.route('/', baseApp);
@@ -228,19 +230,36 @@ export const createApp = ({
     };
   });
 
-  deviceRoute(routes.submitSession, async ({ device, params, body }) => {
-    const session = await store.getSession(params.sessionId);
+  const deviceSession = async (device: DeviceClaims, sessionId: string): Promise<Session> => {
+    const session = await store.getSession(sessionId);
     if (!session) throw new HttpError('not_found', 'Session not found');
     const allowed = device.scope === 'session' ? device.sid === session.id : device.pid === session.patientId;
     if (!allowed) throw new HttpError('forbidden', 'Device token is for another session');
-    const status =
-      session.status === 'created' || session.status === 'in-progress'
-        ? await store.submitSession(session, {
-            partial: body.partial,
-            submittedAt: clock().toISOString(),
-            results: body.results,
-          })
-        : session.status;
+    return session;
+  };
+
+  const isOpen = (session: Session): boolean => session.status === 'created' || session.status === 'in-progress';
+
+  deviceRoute(routes.uploadRecording, async ({ device, params, body }) => {
+    const session = await deviceSession(device, params.sessionId);
+    if (isOpen(session)) {
+      await recordings.put(recordingKey(session.id, body.id), {
+        mimeType: body.mimeType,
+        bytes: new Uint8Array(Buffer.from(body.data, 'base64')),
+      });
+    }
+    return { id: body.id };
+  });
+
+  deviceRoute(routes.submitSession, async ({ device, params, body }) => {
+    const session = await deviceSession(device, params.sessionId);
+    const status = isOpen(session)
+      ? await store.submitSession(session, {
+          partial: body.partial,
+          submittedAt: clock().toISOString(),
+          results: body.results,
+        })
+      : session.status;
     if (status === 'submitted') {
       try {
         await startPipeline(session.id);

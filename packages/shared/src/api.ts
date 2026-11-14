@@ -85,6 +85,21 @@ export const submitSessionResponseSchema = z.object({
   status: sessionStatusSchema,
 });
 
+export const recordingMaxBytes = 1_000_000;
+
+export const uploadRecordingRequestSchema = z.object({
+  id: idSchema,
+  mimeType: z.string().regex(/^audio\//),
+  data: z
+    .base64()
+    .min(1)
+    .max(Math.ceil(recordingMaxBytes / 3) * 4),
+});
+
+export const uploadRecordingResponseSchema = z.object({
+  id: idSchema,
+});
+
 export const patientMetricSchema = z.object({
   metricId: metricIdSchema,
   unit: z.string().min(1),
@@ -232,6 +247,14 @@ export const routes = {
     body: submitSessionRequestSchema,
     response: submitSessionResponseSchema,
   },
+  uploadRecording: {
+    method: 'POST',
+    path: '/api/sessions/:sessionId/recordings',
+    auth: 'device',
+    params: sessionParamsSchema,
+    body: uploadRecordingRequestSchema,
+    response: uploadRecordingResponseSchema,
+  },
   listPatientMetrics: {
     method: 'GET',
     path: '/api/patients/:patientId/metrics',
@@ -357,6 +380,8 @@ export type DeviceSessionCodeRequest = z.infer<typeof deviceSessionCodeRequestSc
 export type DeviceSessionCodeResponse = z.infer<typeof deviceSessionCodeResponseSchema>;
 export type SubmitSessionRequest = z.infer<typeof submitSessionRequestSchema>;
 export type SubmitSessionResponse = z.infer<typeof submitSessionResponseSchema>;
+export type UploadRecordingRequest = z.infer<typeof uploadRecordingRequestSchema>;
+export type UploadRecordingResponse = z.infer<typeof uploadRecordingResponseSchema>;
 export type PatientMetric = z.infer<typeof patientMetricSchema>;
 export type PatientMetricsResponse = z.infer<typeof patientMetricsResponseSchema>;
 export type MetricRange = z.infer<typeof metricRangeSchema>;

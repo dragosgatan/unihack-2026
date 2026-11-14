@@ -1,5 +1,6 @@
 import {
   clockDrawingRawResultSchema,
+  wordRecallRawResultSchema,
   type ActivityId,
   type AiOutput,
   type MetricId,
@@ -7,13 +8,15 @@ import {
   type Side,
   type SuggestionDraft,
 } from '@tempo/shared';
-import { clockDrawingFeatures } from '@tempo/shared/scoring';
+import { clockDrawingFeatures, scoreWordRecall } from '@tempo/shared/scoring';
 import type { Ai, SessionSummaryInput, SuggestReviewInput } from './ai/index.ts';
 import { clockDrawingPng } from './clock-image.ts';
+import type { RecordingReader } from './ports.ts';
+import { recordingKey } from './recording-files.ts';
 
 export type { SessionSummaryInput, SuggestReviewInput };
 
-export type ItemScoringInput = { activityId: ActivityId; data: unknown; inputRef: string };
+export type ItemScoringInput = { activityId: ActivityId; sessionId: string; data: unknown; inputRef: string };
 
 export type ItemScoringOutput = { scores: { metricId: MetricId; side?: Side; value: number }[] };
 
@@ -36,8 +39,30 @@ const scoreClock = async (ai: Ai, { data, inputRef }: ItemScoringInput): Promise
   return { output: { scores: [{ metricId: 'clock-drawing.score', value: output.total }] }, meta };
 };
 
-export const createPipelineAi = (ai: Ai): PipelineAi => ({
+const scoreWords = async (
+  ai: Ai,
+  recordings: RecordingReader,
+  { sessionId, data, inputRef }: ItemScoringInput,
+): Promise<AiOutput<ItemScoringOutput> | undefined> => {
+  const raw = wordRecallRawResultSchema.safeParse(data);
+  if (!raw.success) return undefined;
+  const recording = await recordings.get(recordingKey(sessionId, raw.data.recording.id));
+  if (!recording || recording.bytes.length === 0) return undefined;
+  const { output, meta } = await ai.transcribeSpeech({
+    audio: { mimeType: recording.mimeType, data: recording.bytes },
+    language: raw.data.language,
+    inputRef,
+  });
+  const scores = scoreWordRecall(raw.data, output.words).map(({ metricId, value }) => ({ metricId, value }));
+  return { output: { scores }, meta };
+};
+
+export const createPipelineAi = (ai: Ai, recordings: RecordingReader): PipelineAi => ({
   summarizeSession: (input) => ai.summarizeSession(input, `session:${input.sessionId}`),
-  scoreItem: async (input) => (input.activityId === 'clock-drawing' ? scoreClock(ai, input) : undefined),
+  scoreItem: async (input) => {
+    if (input.activityId === 'clock-drawing') return scoreClock(ai, input);
+    if (input.activityId === 'word-recall') return scoreWords(ai, recordings, input);
+    return undefined;
+  },
   suggestReview: (input) => ai.suggestReview(input),
 });

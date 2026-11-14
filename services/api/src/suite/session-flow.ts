@@ -172,6 +172,57 @@ export const sessionFlowSuite = (factory: HarnessFactory): void => {
     });
   });
 
+  describe('recordings', () => {
+    const audio = new Uint8Array([1, 2, 3, 4, 5]);
+    const recording = (id = crypto.randomUUID()) => ({
+      id,
+      mimeType: 'audio/webm;codecs=opus',
+      data: Buffer.from(audio).toString('base64'),
+    });
+    const upload = (sessionId: string, token: string | undefined, body: unknown) =>
+      call(h.app, `/api/sessions/${sessionId}/recordings`, { method: 'POST', ...(token ? { token } : {}), body });
+    const keyOf = (sessionId: string, id: string) =>
+      `recordings/${encodeURIComponent(sessionId)}/${encodeURIComponent(id)}`;
+
+    it('stores the audio of a running session under its id with the mime type', async () => {
+      const { token, session } = await startSession('pat-2');
+      const body = recording();
+      expect(expectOk(routes.uploadRecording, await upload(session.id, token, body))).toEqual({ id: body.id });
+      expect(await h.recordings.get(keyOf(session.id, body.id))).toEqual({ mimeType: body.mimeType, bytes: audio });
+    });
+
+    it('guards the upload with the device token of that session', async () => {
+      const first = await startSession('pat-2');
+      const second = await startSession('pat-2');
+      const body = recording();
+      expectError(await upload(first.session.id, undefined, body), 401, 'unauthenticated');
+      expectError(await upload(first.session.id, second.token, body), 403, 'forbidden');
+      expectError(await upload('sess-missing', first.token, body), 404, 'not_found');
+      expect(await h.recordings.get(keyOf(first.session.id, body.id))).toBeUndefined();
+    });
+
+    it('refuses a recording that is not audio or not base64', async () => {
+      const { token, session } = await startSession('pat-2');
+      expectError(await upload(session.id, token, { ...recording(), mimeType: 'video/webm' }), 400, 'invalid_request');
+      expectError(await upload(session.id, token, { ...recording(), data: 'not base64!' }), 400, 'invalid_request');
+      expectError(await upload(session.id, token, { ...recording(), data: '' }), 400, 'invalid_request');
+    });
+
+    it('answers a late upload after submit without storing or replacing anything', async () => {
+      const { token, session } = await startSession('pat-2');
+      const kept = recording();
+      await upload(session.id, token, kept);
+      await call(h.app, `/api/sessions/${session.id}/submit`, { method: 'POST', token, body: fingerTappingSubmission });
+
+      const late = recording();
+      expect(expectOk(routes.uploadRecording, await upload(session.id, token, late))).toEqual({ id: late.id });
+      expect(await h.recordings.get(keyOf(session.id, late.id))).toBeUndefined();
+      const replacement = { ...kept, mimeType: 'audio/mp4', data: Buffer.from([9]).toString('base64') };
+      expectOk(routes.uploadRecording, await upload(session.id, token, replacement));
+      expect(await h.recordings.get(keyOf(session.id, kept.id))).toEqual({ mimeType: kept.mimeType, bytes: audio });
+    });
+  });
+
   describe('medication check-in', () => {
     it.each([
       ['pat-1', [{ medicationId: 'med-2', name: 'Levodopa/Carbidopa' }]],

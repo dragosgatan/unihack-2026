@@ -15,6 +15,7 @@ import type {
 import { createAi, createMockProvider } from './ai/index.ts';
 import { createPipelineAi } from './ai-port.ts';
 import type { Email, PipelineDeps } from './ports.ts';
+import { createMemoryRecordingFiles, type MemoryRecordingFiles } from './recording-files.ts';
 import { createMemoryReportFiles, type MemoryReportFiles } from './report-files.ts';
 
 export const now = new Date('2026-11-13T12:00:00.000Z');
@@ -85,7 +86,13 @@ export const skip = (activityId: ActivityId, reason: SkipReason, skippedAt: stri
   skippedAt,
 });
 
-export type Fixture = { store: Store; deps: PipelineDeps; emails: Email[]; reportFiles: MemoryReportFiles };
+export type Fixture = {
+  store: Store;
+  deps: PipelineDeps;
+  emails: Email[];
+  reportFiles: MemoryReportFiles;
+  recordings: MemoryRecordingFiles;
+};
 
 export const fixture = async (): Promise<Fixture> => {
   const store = createMemoryStore();
@@ -95,9 +102,10 @@ export const fixture = async (): Promise<Fixture> => {
   const emails: Email[] = [];
   const clock = () => now;
   const reportFiles = createMemoryReportFiles();
+  const recordings = createMemoryRecordingFiles();
   const deps: PipelineDeps = {
     store,
-    ai: createPipelineAi(createAi({ provider: createMockProvider(), now: clock })),
+    ai: createPipelineAi(createAi({ provider: createMockProvider(), now: clock }), recordings),
     publicData: offlinePublicData,
     sendEmail: async (email) => {
       emails.push(email);
@@ -106,7 +114,7 @@ export const fixture = async (): Promise<Fixture> => {
     appUrl: 'https://tempo.example.test/',
     reportFiles,
   };
-  return { store, deps, emails, reportFiles };
+  return { store, deps, emails, reportFiles, recordings };
 };
 
 export const submit = async (

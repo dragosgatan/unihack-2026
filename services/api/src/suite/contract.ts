@@ -48,6 +48,12 @@ export const contractSuite = (factory: HarnessFactory): void => {
       const redeemed = await call(h.app, '/api/device/session-code', { method: 'POST', body: { code } });
       const { token, session } = expectValid(routes.redeemSessionCode, redeemed);
 
+      const recording = { id: crypto.randomUUID(), mimeType: 'audio/mp4', data: Buffer.from('audio').toString('base64') };
+      expectValid(
+        routes.uploadRecording,
+        await call(h.app, `/api/sessions/${session.id}/recordings`, { method: 'POST', token, body: recording }),
+      );
+
       const submitted = await call(h.app, `/api/sessions/${session.id}/submit`, {
         method: 'POST',
         token,

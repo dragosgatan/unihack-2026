@@ -99,6 +99,38 @@ describe('mock demo session codes', () => {
     info.mockRestore();
   });
 
+  it('scores word recall from the uploaded recording and puts it on the report', async () => {
+    const app = buildTestApp();
+    const { session, token } = await redeem(app, '111111');
+    const recordingId = crypto.randomUUID();
+    const upload = await call(app, `/api/sessions/${session.id}/recordings`, {
+      method: 'POST',
+      token,
+      body: { id: recordingId, mimeType: 'audio/webm;codecs=opus', data: Buffer.from('spoken words').toString('base64') },
+    });
+    expect(upload).toEqual({ status: 200, body: { id: recordingId } });
+
+    const data = {
+      part: 'immediate',
+      language: 'ro',
+      words: ['apple', 'river', 'chair', 'garden', 'candle'],
+      presentedAt: '2026-11-13T11:50:00.000Z',
+      recording: { id: recordingId, mimeType: 'audio/webm;codecs=opus', durationMs: 8000, bytes: 12 },
+    };
+    const completedAt = '2026-11-13T11:51:00.000Z';
+    const body = { partial: false, results: [{ status: 'completed', completedAt, raw: { activityId: 'word-recall', data } }] };
+    await call(app, `/api/sessions/${session.id}/submit`, { method: 'POST', token, body });
+
+    const report = routes.getSessionReport.response.parse((await call(app, `/api/sessions/${session.id}/report`)).body);
+    expect(report.scores).toMatchObject([{ activityId: 'word-recall', metricId: 'word-recall.immediate', value: 4, scoredBy: 'ai' }]);
+    expect(report.aiItems).toHaveLength(1);
+    expect(report.aiItems[0]?.ai.promptVersion).toBe('speech-1');
+    const series = routes.getMetricSeries.response.parse(
+      (await call(app, '/api/patients/pat-1/metrics/word-recall.immediate?range=W')).body,
+    );
+    expect(series.points.filter((point) => point.t === completedAt)).toEqual([{ t: completedAt, value: 4, sessionId: session.id }]);
+  });
+
   it('runs the pipeline into a session report whose PDF opens from a link', async () => {
     const app = buildTestApp();
     const { session, token } = await redeem(app, '111111');

@@ -31,6 +31,8 @@ import {
   startHomeSessionResponseSchema,
   submitSessionRequestSchema,
   submitSessionResponseSchema,
+  uploadRecordingRequestSchema,
+  uploadRecordingResponseSchema,
 } from './api.ts';
 import {
   attending,
@@ -141,6 +143,27 @@ describe('POST /api/sessions/:sessionId/submit', () => {
 
   it('returns the new status', () => {
     expect(submitSessionResponseSchema.safeParse({ sessionId: session.id, status: 'submitted' }).success).toBe(true);
+  });
+});
+
+describe('POST /api/sessions/:sessionId/recordings', () => {
+  const body = { id: '0b6c2f1e-8a43-4f3e-9d61-2c7d5b8e4a10', mimeType: 'audio/webm;codecs=opus', data: 'YXVkaW8=' };
+
+  it('takes an audio recording as base64 under its device id', () => {
+    expect(uploadRecordingRequestSchema.safeParse(body).success).toBe(true);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, mimeType: 'audio/mp4' }).success).toBe(true);
+    expect(uploadRecordingResponseSchema.safeParse({ id: body.id }).success).toBe(true);
+  });
+
+  it('rejects other media, bad or empty base64 and recordings over about a megabyte', () => {
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, mimeType: 'video/webm' }).success).toBe(false);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, data: 'not base64!' }).success).toBe(false);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, data: '' }).success).toBe(false);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, id: '' }).success).toBe(false);
+    const tooBig = 'A'.repeat(1_333_340);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, data: tooBig }).success).toBe(false);
+    const largest = 'A'.repeat(1_333_336);
+    expect(uploadRecordingRequestSchema.safeParse({ ...body, data: largest }).success).toBe(true);
   });
 });
 

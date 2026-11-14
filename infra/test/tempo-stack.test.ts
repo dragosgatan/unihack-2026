@@ -311,7 +311,7 @@ describe('TempoStack', () => {
     });
   });
 
-  it('lets only the Report step put objects in the uploads bucket, and only report PDFs', () => {
+  it('lets the pipeline put only report PDFs and read only recordings in the uploads bucket', () => {
     type Statement = { Action: unknown; Resource: unknown };
     type Policy = { Properties: { Roles: { Ref: string }[]; PolicyDocument: { Statement: Statement[] } } };
     const policies = Object.values(template.findResources('AWS::IAM::Policy')) as Policy[];
@@ -322,12 +322,29 @@ describe('TempoStack', () => {
           (statement) => ({ role: policy.Properties.Roles[0]?.Ref, statement }),
         ),
       );
-    expect(pipelineS3).toHaveLength(1);
-    expect(pipelineS3[0]?.role).toMatch(/^PipelineReportFunctionServiceRole/);
-    expect(pipelineS3[0]?.statement.Action).toBe('s3:PutObject');
-    expect(pipelineS3[0]?.statement.Resource).toEqual({
-      'Fn::Join': ['', [{ 'Fn::GetAtt': [expect.stringMatching(/^Uploads/), 'Arn'] }, '/reports/*']],
+    const objects = (prefix: string) => ({
+      'Fn::Join': ['', [{ 'Fn::GetAtt': [expect.stringMatching(/^Uploads/), 'Arn'] }, `/${prefix}/*`]],
     });
+    expect(pipelineS3).toHaveLength(3);
+    expect(pipelineS3).toEqual(
+      expect.arrayContaining([
+        {
+          role: expect.stringMatching(/^PipelineReportFunctionServiceRole/),
+          statement: expect.objectContaining({ Action: 's3:PutObject', Resource: objects('reports') }),
+        },
+        {
+          role: expect.stringMatching(/^PipelineAiItemsFunctionServiceRole/),
+          statement: expect.objectContaining({ Action: 's3:GetObject', Resource: objects('recordings') }),
+        },
+        {
+          role: expect.stringMatching(/^PipelineAiItemsFunctionServiceRole/),
+          statement: expect.objectContaining({
+            Action: 's3:ListBucket',
+            Resource: { 'Fn::GetAtt': [expect.stringMatching(/^Uploads/), 'Arn'] },
+          }),
+        },
+      ]),
+    );
   });
 
   it('blocks public access on both buckets', () => {

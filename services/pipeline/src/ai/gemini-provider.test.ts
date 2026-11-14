@@ -76,7 +76,7 @@ describe('Gemini provider', () => {
 
     const body = bodyOf(calls[0]);
     expect(body).toMatchObject({
-      model: geminiModel,
+      model: geminiModelsFor('speech')[0],
       system_instruction: 'system prompt',
       store: false,
       input: [
@@ -91,6 +91,11 @@ describe('Gemini provider', () => {
     });
     expect(JSON.stringify(body)).not.toContain('$schema');
     expect(JSON.stringify(body)).not.toContain(apiKey);
+  });
+
+  it('starts transcription from the lite models and the other pipeline tasks from the large one', () => {
+    expect(geminiModelsFor('speech')).toEqual(geminiModelsFor('assistant'));
+    expect(geminiModelsFor('clock-drawing')[0]).toBe(geminiModel);
   });
 
   it('maps images and PDFs to their content types', async () => {

@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Hono } from 'hono';
-import { createAi, createMemoryReportFiles, createMockProvider, type MemoryReportFiles } from '@tempo/pipeline';
+import {
+  createAi,
+  createMemoryRecordingFiles,
+  createMemoryReportFiles,
+  createMockProvider,
+  type MemoryRecordingFiles,
+  type MemoryReportFiles,
+} from '@tempo/pipeline';
 import { apiErrorSchema, type RouteDefinition } from '@tempo/shared';
 import { expect } from 'vitest';
 import type { z } from 'zod';
@@ -21,6 +28,7 @@ export type Harness = {
   seed: Seed;
   startedPipelines: string[];
   reportFiles: MemoryReportFiles;
+  recordings: MemoryRecordingFiles;
   id: (seedId: string) => string;
   setNow: (now: Date) => void;
 };
@@ -33,6 +41,7 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
   let now = fixedNow;
   const startedPipelines: string[] = [];
   const reportFiles = createMemoryReportFiles();
+  const recordings = createMemoryRecordingFiles();
   const tokens = new Map([...mockStaffTokens].map(([token, staffId]) => [token, ids.get(staffId) ?? staffId]));
   const app = createApp({
     store,
@@ -45,6 +54,7 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
     publicData: offlinePublicData,
     ai: createAi({ provider: createMockProvider(), now: () => now }),
     reportFiles,
+    recordings,
   });
   return {
     app,
@@ -52,6 +62,7 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
     seed,
     startedPipelines,
     reportFiles,
+    recordings,
     id: (seedId) => ids.get(seedId) ?? seedId,
     setNow: (next) => {
       now = next;
