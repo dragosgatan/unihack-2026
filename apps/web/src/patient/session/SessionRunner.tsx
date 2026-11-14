@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Language } from '@tempo/shared';
+import { Navigate } from 'react-router';
+import type { Language, SubmittedResult } from '@tempo/shared';
 import { activityModules } from '../activities/index.ts';
 import { Placeholder } from '../activities/placeholder/Placeholder.tsx';
 import { Screen } from '../Screen.tsx';
@@ -19,11 +20,16 @@ import {
   type RunnerState,
   type Stage,
 } from './runner.ts';
-import { finishRunner, loadRunner, saveRunner, syncOutbox } from './store.ts';
+import { finishRunner, loadRunner, redeemSessionCode, saveRunner, syncOutbox } from './store.ts';
 
 const sync = () => void syncOutbox().catch(console.error);
 
-export function SessionRunner() {
+type SessionRunnerProps = {
+  exitTo?: string;
+  onFinish?: (results: SubmittedResult[], at: Date) => void;
+};
+
+export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState<RunnerState>();
   const [finished, setFinished] = useState<{ name: string; language: Language }>();
@@ -56,7 +62,10 @@ export function SessionRunner() {
     );
   }
 
-  if (!state) return <CodeEntry onRedeemed={(redeemed) => setState(startRunner(redeemed))} />;
+  if (!state) {
+    if (exitTo) return <Navigate to={exitTo} replace />;
+    return <CodeEntry title="Enter your session code" redeem={redeemSessionCode} onRedeemed={(redeemed) => setState(startRunner(redeemed))} />;
+  }
 
   const language = state.plan.language;
   const go = (stage: Stage) => setState({ ...state, stage });
@@ -64,6 +73,7 @@ export function SessionRunner() {
   const finish = (final: RunnerState) => {
     finishRunner({ sessionId: final.session.id, token: final.token, body: submission(final) }).then(() => {
       setState(undefined);
+      onFinish?.(final.results, new Date());
       setFinished({ name: final.patientFirstName, language: final.plan.language });
       sync();
     }, console.error);

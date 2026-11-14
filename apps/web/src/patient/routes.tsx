@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Link, Route, Routes } from 'react-router';
+import { HomeRoutes } from './home/HomeRoutes.tsx';
 
 const PoseLab = lazy(async () => ({ default: (await import('./lab/PoseLab.tsx')).PoseLab }));
 const SessionRunner = lazy(async () => ({ default: (await import('./session/SessionRunner.tsx')).SessionRunner }));
@@ -15,6 +16,9 @@ export function PatientRoutes() {
             <Link className="mt-4 block text-[20pt] underline" to="session">
               Start a session
             </Link>
+            <Link className="mt-4 block text-[20pt] underline" to="home">
+              Home mode
+            </Link>
             <Link className="mt-4 block text-[20pt] underline" to="lab/pose">
               Pose lab
             </Link>
@@ -29,6 +33,7 @@ export function PatientRoutes() {
           </Suspense>
         }
       />
+      <Route path="home/*" element={<HomeRoutes />} />
       <Route
         path="lab/pose"
         element={

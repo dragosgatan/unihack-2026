@@ -1,31 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { routes, type DeviceSessionCodeResponse } from '@tempo/shared';
-import { TapButton } from '../TapButton.tsx';
+import { sessionCodeSchema, type Language } from '@tempo/shared';
+import { DigitEntry } from '../DigitEntry.tsx';
 
-const codeLength = 6;
-const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0'];
+type CodeEntryProps<T> = {
+  title: string;
+  redeem: (code: string) => Promise<T>;
+  onRedeemed: (redeemed: T) => void;
+  initialCode?: string;
+  language?: Language;
+};
 
-async function redeem(code: string) {
-  const res = await fetch(routes.redeemSessionCode.path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  if (!res.ok) throw new Error(`Session code rejected with ${res.status}`);
-  return routes.redeemSessionCode.response.parse(await res.json());
-}
+export function CodeEntry<T>({ title, redeem, onRedeemed, initialCode, language = 'en' }: CodeEntryProps<T>) {
+  const [attempt, setAttempt] = useState(0);
+  const mutation = useMutation({ mutationFn: redeem, onSuccess: onRedeemed, onError: () => setAttempt((n) => n + 1) });
+  const redeemedInitial = useRef(false);
 
-export function CodeEntry({ onRedeemed }: { onRedeemed: (redeemed: DeviceSessionCodeResponse) => void }) {
-  const [digits, setDigits] = useState('');
-  const mutation = useMutation({ mutationFn: redeem, onSuccess: onRedeemed, onError: () => setDigits('') });
-
-  const press = (key: string) => {
-    if (mutation.isPending || digits.length >= codeLength) return;
-    const next = digits + key;
-    setDigits(next);
-    if (next.length === codeLength) mutation.mutate(next);
-  };
+  useEffect(() => {
+    if (redeemedInitial.current || !sessionCodeSchema.safeParse(initialCode).success) return;
+    redeemedInitial.current = true;
+    mutation.mutate(initialCode ?? '');
+  }, [initialCode, mutation]);
 
   const message = mutation.isPending
     ? 'Checking the code…'
@@ -36,32 +31,14 @@ export function CodeEntry({ onRedeemed }: { onRedeemed: (redeemed: DeviceSession
         : 'Your therapist will give you the code.';
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 p-6 text-[20pt]">
-      <h1 className="text-center text-[32pt] font-bold">Enter your session code</h1>
-      <p className="text-center" role="status">
-        {message}
-      </p>
-      <div className="flex justify-center gap-2" aria-label={`${digits.length} of ${codeLength} digits entered`}>
-        {Array.from({ length: codeLength }, (_, i) => (
-          <span key={i} className="flex h-[48pt] w-[36pt] items-center justify-center rounded-xl border-2 border-neutral-400 font-mono text-[28pt]">
-            {digits[i] ?? ''}
-          </span>
-        ))}
-      </div>
-      <div className="mt-auto grid grid-cols-3 gap-3">
-        {keys.map((key, i) =>
-          key ? (
-            <TapButton key={i} variant="secondary" disabled={mutation.isPending} onTap={() => press(key)}>
-              {key}
-            </TapButton>
-          ) : (
-            <span key={i} />
-          ),
-        )}
-        <TapButton variant="secondary" label="Delete" disabled={mutation.isPending} onTap={() => setDigits(digits.slice(0, -1))}>
-          ⌫
-        </TapButton>
-      </div>
-    </main>
+    <DigitEntry
+      key={attempt}
+      title={title}
+      message={message}
+      language={language}
+      length={6}
+      busy={mutation.isPending}
+      onEntered={(code) => mutation.mutate(code)}
+    />
   );
 }

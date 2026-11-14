@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, routes, submitSessionRequestSchema } from '@tempo/shared';
+import { episodeTypeSchema, idSchema, isoDateTimeSchema, routes, submitSessionRequestSchema } from '@tempo/shared';
 import { runnerStateSchema, type RunnerState } from './runner.ts';
 
 const outboxEntrySchema = z.object({
@@ -10,18 +10,34 @@ const outboxEntrySchema = z.object({
 
 export type OutboxEntry = z.infer<typeof outboxEntrySchema>;
 
+// shortcut: body of POST /api/device/episodes asked of C; move it to packages/shared when that route lands.
+const episodeEntrySchema = z.object({
+  token: z.string().min(1),
+  body: z.object({
+    id: idSchema,
+    type: episodeTypeSchema,
+    count: z.number().int().positive(),
+    occurredAt: isoDateTimeSchema,
+    description: z.string().min(1).optional(),
+  }),
+});
+
+export type EpisodeEntry = z.infer<typeof episodeEntrySchema>;
+const episodesPath = '/api/device/episodes';
+
 const currentKey = 'current';
 let opening: Promise<IDBDatabase> | undefined;
 
 const database = () =>
   (opening ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open('tempo-patient', 2);
+    const request = indexedDB.open('tempo-patient', 3);
     request.onupgradeneeded = ({ oldVersion }) => {
       if (oldVersion < 1) {
         request.result.createObjectStore('runner');
         request.result.createObjectStore('outbox', { keyPath: 'sessionId' });
       }
-      request.result.createObjectStore('recordings');
+      if (oldVersion < 2) request.result.createObjectStore('recordings');
+      if (oldVersion < 3) request.result.createObjectStore('episodes', { keyPath: 'body.id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -66,6 +82,16 @@ export async function finishRunner(entry: OutboxEntry) {
   await transactionDone(tx);
 }
 
+export async function redeemSessionCode(code: string) {
+  const res = await fetch(routes.redeemSessionCode.path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error(`Session code rejected with ${res.status}`);
+  return routes.redeemSessionCode.response.parse(await res.json());
+}
+
 async function send(entry: OutboxEntry) {
   const path = routes.submitSession.path.replace(':sessionId', encodeURIComponent(entry.sessionId));
   const res = await fetch(path, {
@@ -93,5 +119,31 @@ export async function syncOutbox() {
     } catch (error) {
       console.error(error);
     }
+  }
+}
+
+export async function queueEpisode(entry: EpisodeEntry) {
+  const tx = (await database()).transaction('episodes', 'readwrite');
+  tx.objectStore('episodes').put(entry);
+  await transactionDone(tx);
+}
+
+export async function syncEpisodes() {
+  const stored: unknown[] = await requestDone((await database()).transaction('episodes').objectStore('episodes').getAll());
+  for (const item of stored) {
+    const parsed = episodeEntrySchema.safeParse(item);
+    if (!parsed.success) {
+      console.error('Unreadable episode kept', parsed.error);
+      continue;
+    }
+    const res = await fetch(episodesPath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${parsed.data.token}` },
+      body: JSON.stringify(parsed.data.body),
+    });
+    if (!res.ok) throw new Error(`Episode ${parsed.data.body.id} not sent, status ${res.status}`);
+    const tx = (await database()).transaction('episodes', 'readwrite');
+    tx.objectStore('episodes').delete(parsed.data.body.id);
+    await transactionDone(tx);
   }
 }
