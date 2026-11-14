@@ -15,6 +15,7 @@ import type {
 import { createAi, createMockProvider } from './ai/index.ts';
 import { createPipelineAi } from './ai-port.ts';
 import type { Email, PipelineDeps } from './ports.ts';
+import { createMemoryReportFiles, type MemoryReportFiles } from './report-files.ts';
 
 export const now = new Date('2026-11-13T12:00:00.000Z');
 export const day = (n: number, hour = 10): string => new Date(Date.UTC(2026, 10, n, hour)).toISOString();
@@ -84,7 +85,7 @@ export const skip = (activityId: ActivityId, reason: SkipReason, skippedAt: stri
   skippedAt,
 });
 
-export type Fixture = { store: Store; deps: PipelineDeps; emails: Email[] };
+export type Fixture = { store: Store; deps: PipelineDeps; emails: Email[]; reportFiles: MemoryReportFiles };
 
 export const fixture = async (): Promise<Fixture> => {
   const store = createMemoryStore();
@@ -93,6 +94,7 @@ export const fixture = async (): Promise<Fixture> => {
   await store.putPlan(plan);
   const emails: Email[] = [];
   const clock = () => now;
+  const reportFiles = createMemoryReportFiles();
   const deps: PipelineDeps = {
     store,
     ai: createPipelineAi(createAi({ provider: createMockProvider(), now: clock })),
@@ -102,8 +104,9 @@ export const fixture = async (): Promise<Fixture> => {
     },
     clock,
     appUrl: 'https://tempo.example.test/',
+    reportFiles,
   };
-  return { store, deps, emails };
+  return { store, deps, emails, reportFiles };
 };
 
 export const submit = async (

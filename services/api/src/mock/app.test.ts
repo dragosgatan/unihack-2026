@@ -99,6 +99,23 @@ describe('mock demo session codes', () => {
     info.mockRestore();
   });
 
+  it('runs the pipeline into a session report whose PDF opens from a link', async () => {
+    const app = buildTestApp();
+    const { session, token } = await redeem(app, '111111');
+    const path = `/api/sessions/${session.id}/submit`;
+    await call(app, path, { method: 'POST', token, body: fingerTappingSubmission });
+
+    const report = routes.getSessionReport.response.parse((await call(app, `/api/sessions/${session.id}/report`)).body);
+    expect(report.pdfKey).toBe(`reports/pat-1/${session.id}.pdf`);
+    const link = routes.createReportLink.response.parse(
+      (await call(app, `/api/sessions/${session.id}/report/link`, { method: 'POST' })).body,
+    );
+    const res = await app.request(link.url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/pdf');
+    expect(Buffer.from(await res.arrayBuffer()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
   it('never hands out a demo code for a new session', async () => {
     const app = buildTestApp();
     const created = await call(app, '/api/patients/pat-2/sessions', { method: 'POST', body: { mode: 'kiosk' } });

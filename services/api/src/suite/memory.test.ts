@@ -5,6 +5,7 @@ import { assistantSuite } from './assistant.ts';
 import { contractSuite } from './contract.ts';
 import { memoryHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
+import { reportsSuite } from './reports.ts';
 import { sessionFlowSuite } from './session-flow.ts';
 import { storeSuite } from './store.ts';
 import { suggestionsSuite } from './suggestions.ts';
@@ -17,4 +18,5 @@ describe('memory store', () => {
   describe('pairing', () => pairingSuite(memoryHarness));
   describe('suggestions', () => suggestionsSuite(memoryHarness));
   describe('assistant', () => assistantSuite(memoryHarness));
+  describe('reports', () => reportsSuite(memoryHarness));
 });

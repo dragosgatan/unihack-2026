@@ -21,7 +21,7 @@ import type { Seed } from '../mock/seed/build.ts';
 import { keyOfFlag } from './keys.ts';
 import { storedCheckIns, storedResults, storedSkips, type StoredSkip } from './submission.ts';
 import { newestFirst, withDecision } from './suggestions.ts';
-import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
+import type { CodeEntry, MetricValue, PublicDataEntry, ReportLink, Store } from './types.ts';
 
 const seriesKey = (patientId: string, metricId: string, side: Side | undefined): string =>
   `${patientId}|${metricId}|${side ?? 'none'}`;
@@ -67,6 +67,8 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const suggestions = new Map<string, Suggestion>();
   const auditEntries: AuditEntry[] = [];
   const assistantTurns = new Map<string, AssistantTurnRecord>();
+  const reminders = new Set<string>();
+  const reportLinks = new Map<string, ReportLink>();
 
   const addMetricValues = (values: MetricValue[]): void => {
     for (const value of values) {
@@ -310,5 +312,27 @@ export const createMemoryStore = (seed?: Seed): Store => {
     },
 
     getAssistantTurn: async (turnId) => assistantTurns.get(turnId),
+
+    listInstitutions: async () => [...institutions.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+
+    claimReminder: async (patientId, kind, occurrence) => {
+      const key = `${patientId}|${kind}|${occurrence}`;
+      if (reminders.has(key)) return false;
+      reminders.add(key);
+      return true;
+    },
+
+    releaseReminder: async (patientId, kind, occurrence) => {
+      reminders.delete(`${patientId}|${kind}|${occurrence}`);
+    },
+
+    putReportLink: async (link) => {
+      reportLinks.set(link.token, link);
+    },
+
+    getReportLink: async (token, now) => {
+      const link = reportLinks.get(token);
+      return link && link.expiresAt > now.toISOString() ? link : undefined;
+    },
   };
 };

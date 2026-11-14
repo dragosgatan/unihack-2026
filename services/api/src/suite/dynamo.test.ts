@@ -5,6 +5,7 @@ import { assistantSuite } from './assistant.ts';
 import { contractSuite } from './contract.ts';
 import { dynamoHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
+import { reportsSuite } from './reports.ts';
 import { sessionFlowSuite } from './session-flow.ts';
 import { storeSuite } from './store.ts';
 import { suggestionsSuite } from './suggestions.ts';
@@ -22,6 +23,7 @@ if (tableName) {
     describe('pairing', () => pairingSuite(harness));
     describe('suggestions', () => suggestionsSuite(harness));
     describe('assistant', () => assistantSuite(harness));
+    describe('reports', () => reportsSuite(harness));
   });
 } else {
   describe('DynamoDB store', () => {

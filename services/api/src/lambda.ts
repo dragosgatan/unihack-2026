@@ -6,6 +6,7 @@ import { cacheSuccess } from './cache.ts';
 import { createApp } from './create-app.ts';
 import { createStepFunctionsStarter } from './pipeline-starter.ts';
 import { createPublicData } from './public-data/index.ts';
+import { createS3ReportFileOpener } from './report-files.ts';
 import { createDynamoStore } from './store/dynamo.ts';
 
 const requiredEnv = (name: string): string => {
@@ -36,5 +37,8 @@ const staffAuth = createCognitoStaffAuth({
 const startPipeline = createStepFunctionsStarter(requiredEnv('STATE_MACHINE_ARN'));
 const publicData = createPublicData({ fetch, clock, cache: store });
 const ai = aiFromEnv();
+const reportFiles = createS3ReportFileOpener(requiredEnv('UPLOADS_BUCKET'));
 
-export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline, publicData, ai }));
+export const handler = handle(
+  createApp({ store, staffAuth, tokenSecret, clock, startPipeline, publicData, ai, reportFiles }),
+);

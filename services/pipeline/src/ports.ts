@@ -15,6 +15,7 @@ import type {
   Suggestion,
 } from '@tempo/shared';
 import type { PublicData } from '@tempo/api/public-data';
+import type { ReportLink } from '@tempo/api/store';
 import type { PipelineAi } from './ai-port.ts';
 
 export type PointWrite = {
@@ -48,11 +49,15 @@ export type PipelineStore = {
   getReport(sessionId: string): Promise<SessionReport | undefined>;
   getSuggestion(patientId: string, suggestionId: string): Promise<Suggestion | undefined>;
   createSuggestion(suggestion: Suggestion): Promise<boolean>;
+  listPoints(patientId: string, metricId: MetricId, side: Side | undefined, range: { from: string; to: string }): Promise<MetricPoint[]>;
+  putReportLink(link: ReportLink): Promise<void>;
 };
 
 export type Email = { to: string; subject: string; text: string };
 
 export type SendEmail = (email: Email) => Promise<void>;
+
+export type ReportFiles = { put(key: string, pdf: Uint8Array): Promise<void> };
 
 export type PipelineDeps = {
   store: PipelineStore;
@@ -61,6 +66,7 @@ export type PipelineDeps = {
   sendEmail: SendEmail;
   clock: () => Date;
   appUrl: string;
+  reportFiles: ReportFiles;
 };
 
 export const requireSession = async (store: PipelineStore, sessionId: string): Promise<Session> => {

@@ -1,17 +1,33 @@
-import { metricDefinitions, type ReportScore, type ReportSkip, type SkipFlag } from '@tempo/shared';
-import { requireSession, sideOf, type PipelineDeps } from '../ports.ts';
-import type { CompareState, PipelineInput } from '../state.ts';
+import { metricDefinitions, type ReportScore, type ReportSkip, type SessionReport, type SkipFlag } from '@tempo/shared';
+import { requireSession, sideOf, type PipelineDeps, type PipelineStore } from '../ports.ts';
+import { historyMonths, monthsBefore, renderSessionReportPdf, type ReportPdfHistory } from '../report-pdf/index.ts';
+import { reportPdfKey } from '../report-files.ts';
+import type { CompareState, Comparison, PipelineInput } from '../state.ts';
 import { isSkipped } from './results.ts';
 
-export const report = async ({ store, ai, clock }: PipelineDeps, state: CompareState): Promise<PipelineInput> => {
+const historyOf = async (store: PipelineStore, patientId: string, comparison: Comparison): Promise<ReportPdfHistory> => ({
+  metricId: comparison.metricId,
+  ...sideOf(comparison.side),
+  previous: comparison.previous,
+  points: await store.listPoints(patientId, comparison.metricId, comparison.side, {
+    from: monthsBefore(comparison.t, historyMonths),
+    to: comparison.t,
+  }),
+});
+
+export const report = async (
+  { store, ai, clock, reportFiles }: PipelineDeps,
+  state: CompareState,
+): Promise<PipelineInput> => {
   const { sessionId } = state;
   if (await store.getReport(sessionId)) return { sessionId };
 
   const session = await requireSession(store, sessionId);
-  const [detail, results, flags] = await Promise.all([
+  const [detail, results, flags, history] = await Promise.all([
     store.getPatientDetail(session.patientId),
     store.listResults(sessionId),
     store.listFlags(session.patientId, sessionId),
+    Promise.all(state.comparisons.map((comparison) => historyOf(store, session.patientId, comparison))),
   ]);
 
   const skipped = results.filter(isSkipped).map(
@@ -59,7 +75,7 @@ export const report = async ({ store, ai, clock }: PipelineDeps, state: CompareS
     skipped: skipped.map(({ activityId, reason, stage }) => ({ activityId, reason, stage })),
   });
 
-  await store.putReport({
+  const built: SessionReport = {
     sessionId,
     patientId: session.patientId,
     generatedAt: clock().toISOString(),
@@ -68,6 +84,14 @@ export const report = async ({ store, ai, clock }: PipelineDeps, state: CompareS
     scores,
     aiItems: state.aiItems,
     aiSummary: { label: 'ai-generated', summary: output.summary, claims: output.claims, ai: meta },
-  });
+  };
+  if (!detail) {
+    console.warn(`No patient found for session ${sessionId}, so the report has no PDF`);
+    await store.putReport(built);
+    return { sessionId };
+  }
+  const pdfKey = reportPdfKey(session.patientId, sessionId);
+  await reportFiles.put(pdfKey, await renderSessionReportPdf({ report: built, patient: detail.patient, session, history }));
+  await store.putReport({ ...built, pdfKey });
   return { sessionId };
 };

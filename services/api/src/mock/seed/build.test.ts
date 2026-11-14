@@ -50,6 +50,7 @@ describe('buildSeed', () => {
 
   it('uses synthetic example.test emails', () => {
     for (const staff of seed.staff) expect(staff.email.endsWith('@example.test')).toBe(true);
+    for (const patient of seed.patients) expect(patient.reminderEmail?.endsWith('@example.test')).toBe(true);
   });
 
   it('gives every patient at least 20 processed sessions over at least 80 days, ending in the past', () => {

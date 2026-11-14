@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { aiFromEnv, createPipelineAi, logEmail, runPipeline } from '@tempo/pipeline';
+import { aiFromEnv, createMemoryReportFiles, createPipelineAi, logEmail, runPipeline } from '@tempo/pipeline';
 import { createMockStaffAuth } from '../auth/staff.ts';
 import { createApp } from '../create-app.ts';
 import { offlinePublicData } from '../public-data/index.ts';
@@ -16,6 +16,7 @@ export type MockAppOptions = { clock?: () => Date; seed?: Seed; store?: Store };
 export const createMockApp = ({ clock = () => new Date(), seed, store: given }: MockAppOptions = {}): Hono => {
   const store = given ?? createMemoryStore(seed ?? buildSeed(clock()));
   const ai = aiFromEnv();
+  const reportFiles = createMemoryReportFiles();
   const pipeline = {
     store,
     ai: createPipelineAi(ai),
@@ -23,6 +24,7 @@ export const createMockApp = ({ clock = () => new Date(), seed, store: given }: 
     sendEmail: logEmail,
     clock,
     appUrl: mockAppUrl,
+    reportFiles,
   };
   return createApp({
     store,
@@ -35,5 +37,6 @@ export const createMockApp = ({ clock = () => new Date(), seed, store: given }: 
     publicData: offlinePublicData,
     ai,
     demoSessionCodes,
+    reportFiles,
   });
 };

@@ -271,4 +271,52 @@ export const storeSuite = (factory: StoreFactory): void => {
       expect(await store.listCheckIns(unique('pat'), day)).toEqual([]);
     });
   });
+
+  describe('institutions', () => {
+    it('lists every institution that was put, once each', async () => {
+      const store = factory();
+      const first = { id: unique('inst'), name: 'Riverside Rehabilitation Centre', timezone: 'Europe/Bucharest' };
+      const second = { id: unique('inst'), name: 'Hillcrest Clinic', timezone: 'Europe/Berlin' };
+      await store.putInstitution(first);
+      await store.putInstitution(second);
+      await store.putInstitution({ ...second, name: 'Hillcrest Rehabilitation Clinic' });
+      const listed = (await store.listInstitutions()).filter(({ id }) => id === first.id || id === second.id);
+      expect(listed.sort((a, b) => (a.id < b.id ? -1 : 1))).toEqual(
+        [first, { ...second, name: 'Hillcrest Rehabilitation Clinic' }].sort((a, b) => (a.id < b.id ? -1 : 1)),
+      );
+    });
+  });
+
+  describe('reminders', () => {
+    const keepUntil = '2026-11-20T00:00:00.000Z';
+
+    it('claims a reminder once per patient, kind and occurrence', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      expect(await store.claimReminder(patientId, 'check-in', '2026-11-13', keepUntil)).toBe(true);
+      expect(await store.claimReminder(patientId, 'check-in', '2026-11-13', keepUntil)).toBe(false);
+      expect(await store.claimReminder(patientId, 'missed-session', '2026-11-13', keepUntil)).toBe(true);
+      expect(await store.claimReminder(patientId, 'check-in', '2026-11-14', keepUntil)).toBe(true);
+      expect(await store.claimReminder(unique('pat'), 'check-in', '2026-11-13', keepUntil)).toBe(true);
+    });
+
+    it('can claim a reminder again after it was released', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      await store.claimReminder(patientId, 'missed-session', '2026-11-13', keepUntil);
+      await store.releaseReminder(patientId, 'missed-session', '2026-11-13');
+      expect(await store.claimReminder(patientId, 'missed-session', '2026-11-13', keepUntil)).toBe(true);
+    });
+  });
+
+  describe('report links', () => {
+    it('returns a link until it expires and nothing for an unknown token', async () => {
+      const store = factory();
+      const link = { token: unique('token'), sessionId: unique('sess'), expiresAt: '2026-11-13T10:05:00.000Z' };
+      await store.putReportLink(link);
+      expect(await store.getReportLink(link.token, new Date('2026-11-13T10:04:59.999Z'))).toEqual(link);
+      expect(await store.getReportLink(link.token, new Date('2026-11-13T10:05:00.000Z'))).toBeUndefined();
+      expect(await store.getReportLink(unique('token'), new Date('2026-11-13T10:00:00.000Z'))).toBeUndefined();
+    });
+  });
 };

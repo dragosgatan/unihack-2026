@@ -14,6 +14,7 @@ import {
   submittedResultSchema,
 } from './session.ts';
 import { suggestionSchema } from './suggestion.ts';
+import { sessionReportSchema } from './report.ts';
 
 export const sessionCodeSchema = z.string().regex(/^\d{6}$/);
 
@@ -157,6 +158,19 @@ export const suggestionDecisionRequestSchema = z.discriminatedUnion('status', [
 export const suggestionDecisionResponseSchema = z.object({
   suggestion: suggestionSchema,
 });
+
+export const sessionReportResponseSchema = sessionReportSchema;
+
+export const reportLinkResponseSchema = z.object({
+  url: z.string().startsWith('/api/report-links/'),
+  expiresAt: isoDateTimeSchema,
+});
+
+export const reportLinkPath = '/api/report-links/:token';
+
+export const reportLinkUrl = (token: string): string => reportLinkPath.replace(':token', encodeURIComponent(token));
+
+export const reportLinkParamsSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 
 export type RouteDefinition = {
   method: 'GET' | 'POST';
@@ -310,6 +324,20 @@ export const routes = {
     body: assistantTurnRequestSchema,
     response: assistantTurnResponseSchema,
   },
+  getSessionReport: {
+    method: 'GET',
+    path: '/api/sessions/:sessionId/report',
+    auth: 'staff',
+    params: sessionParamsSchema,
+    response: sessionReportResponseSchema,
+  },
+  createReportLink: {
+    method: 'POST',
+    path: '/api/sessions/:sessionId/report/link',
+    auth: 'staff',
+    params: sessionParamsSchema,
+    response: reportLinkResponseSchema,
+  },
 } as const satisfies Record<string, RouteDefinition>;
 
 export type RouteName = keyof typeof routes;
@@ -346,3 +374,6 @@ export type SuggestionListResponse = z.infer<typeof suggestionListResponseSchema
 export type SuggestionDecisionRequest = z.infer<typeof suggestionDecisionRequestSchema>;
 export type SuggestionDecisionResponse = z.infer<typeof suggestionDecisionResponseSchema>;
 export type FlagListResponse = z.infer<typeof flagListResponseSchema>;
+export type SessionReportResponse = z.infer<typeof sessionReportResponseSchema>;
+export type ReportLinkResponse = z.infer<typeof reportLinkResponseSchema>;
+export type ReportLinkParams = z.infer<typeof reportLinkParamsSchema>;

@@ -64,6 +64,10 @@ export type SuggestionDecision = {
   decidedAt: string;
 };
 
+export type ReminderKind = 'check-in' | 'missed-session';
+
+export type ReportLink = { token: string; sessionId: string; expiresAt: string };
+
 export type Store = {
   getStaff(staffId: string): Promise<Staff | undefined>;
   listPatients(institutionId: string): Promise<Patient[]>;
@@ -112,4 +116,9 @@ export type Store = {
   listAuditEntries(institutionId: string): Promise<AuditEntry[]>;
   putAssistantTurn(turn: AssistantTurnRecord): Promise<void>;
   getAssistantTurn(turnId: string): Promise<AssistantTurnRecord | undefined>;
+  listInstitutions(): Promise<Institution[]>;
+  claimReminder(patientId: string, kind: ReminderKind, occurrence: string, keepUntil: string): Promise<boolean>;
+  releaseReminder(patientId: string, kind: ReminderKind, occurrence: string): Promise<void>;
+  putReportLink(link: ReportLink): Promise<void>;
+  getReportLink(token: string, now: Date): Promise<ReportLink | undefined>;
 };

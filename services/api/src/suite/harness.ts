@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Hono } from 'hono';
-import { createAi, createMockProvider } from '@tempo/pipeline';
+import { createAi, createMemoryReportFiles, createMockProvider, type MemoryReportFiles } from '@tempo/pipeline';
 import { apiErrorSchema, type RouteDefinition } from '@tempo/shared';
 import { expect } from 'vitest';
 import type { z } from 'zod';
@@ -20,6 +20,7 @@ export type Harness = {
   store: Store;
   seed: Seed;
   startedPipelines: string[];
+  reportFiles: MemoryReportFiles;
   id: (seedId: string) => string;
   setNow: (now: Date) => void;
 };
@@ -31,6 +32,7 @@ const suiteSecret = 'tempo-suite-device-token-secret';
 const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>): Harness => {
   let now = fixedNow;
   const startedPipelines: string[] = [];
+  const reportFiles = createMemoryReportFiles();
   const tokens = new Map([...mockStaffTokens].map(([token, staffId]) => [token, ids.get(staffId) ?? staffId]));
   const app = createApp({
     store,
@@ -42,12 +44,14 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
     },
     publicData: offlinePublicData,
     ai: createAi({ provider: createMockProvider(), now: () => now }),
+    reportFiles,
   });
   return {
     app,
     store,
     seed,
     startedPipelines,
+    reportFiles,
     id: (seedId) => ids.get(seedId) ?? seedId,
     setNow: (next) => {
       now = next;

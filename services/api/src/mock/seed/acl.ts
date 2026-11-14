@@ -28,6 +28,7 @@ export const buildAclPatient = (now: Date): PatientSeed => {
     attendingId: attending.id,
     therapistIds: [therapist.id],
     createdAt: daysBefore(now, 97, 14).toISOString(),
+    reminderEmail: 'andrei.popa@example.test',
   };
 
   const record: MedicalRecord = {

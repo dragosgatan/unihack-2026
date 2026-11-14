@@ -1,7 +1,9 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
-import type { Ai } from '@tempo/pipeline';
+import { createReportLink, type Ai } from '@tempo/pipeline';
 import {
+  reportLinkParamsSchema,
+  reportLinkPath,
   routes,
   type AssistantRole,
   type AssistantTurnRecord,
@@ -10,6 +12,7 @@ import {
   type RouteDefinition,
   type Session,
   type SessionPlan,
+  type SessionReport,
   type Staff,
 } from '@tempo/shared';
 import { clinicalPatient, requireRecord, visiblePatients } from './access.ts';
@@ -35,11 +38,14 @@ import {
 } from './http.ts';
 import type { PipelineStarter } from './pipeline-starter.ts';
 import type { PublicData } from './public-data/index.ts';
+import type { ReportFileOpener } from './report-files.ts';
 import { buildMetricSeries, listPatientMetrics } from './series.ts';
 import { newestFirst } from './store/suggestions.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
 const codeLifetimeMs = 10 * 60_000;
+const reportLinkLifetimeMs = 5 * 60_000;
+const reportLinkHeaders = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };
 
 export type AppOptions = {
   store: Store;
@@ -50,6 +56,7 @@ export type AppOptions = {
   publicData: PublicData;
   ai: Pick<Ai, 'assistantTurn'>;
   demoSessionCodes?: ReadonlyMap<string, string>;
+  reportFiles: ReportFileOpener;
 };
 
 type AssistantCaller = { role: AssistantRole; id: string; institutionId: string };
@@ -67,6 +74,7 @@ export const createApp = ({
   publicData,
   ai,
   demoSessionCodes = new Map(),
+  reportFiles,
 }: AppOptions): Hono => {
   const app = new Hono();
   app.route('/', baseApp);
@@ -403,6 +411,47 @@ export const createApp = ({
       actions: filtered.kept,
       droppedActionIds: filtered.dropped.map((dropped) => dropped.id),
     };
+  });
+
+  const sessionReport = async (staff: Staff, sessionId: string): Promise<SessionReport> => {
+    const session = await store.getSession(sessionId);
+    if (!session) throw new HttpError('not_found', 'Session not found');
+    await clinicalPatient(store, staff, session.patientId);
+    const report = await store.getReport(session.id);
+    if (!report) throw new HttpError('not_found', 'Report not found');
+    return report;
+  };
+
+  staffRoute(routes.getSessionReport, async ({ staff, params }) => sessionReport(staff, params.sessionId));
+
+  staffRoute(routes.createReportLink, async ({ staff, params }) => {
+    const report = await sessionReport(staff, params.sessionId);
+    if (!report.pdfKey) throw new HttpError('not_found', 'Report PDF not found');
+    const { url, expiresAt } = await createReportLink(store, report.sessionId, clock(), reportLinkLifetimeMs);
+    return { url, expiresAt };
+  });
+
+  app.get(reportLinkPath, async (c) => {
+    const params = reportLinkParamsSchema.safeParse(c.req.param());
+    const link = params.success ? await store.getReportLink(params.data.token, clock()) : undefined;
+    const report = link && (await store.getReport(link.sessionId));
+    const file = report?.pdfKey === undefined ? undefined : await reportFiles.open(report.pdfKey);
+    if (!file) {
+      const missing = errorResponse('not_found', 'Report link is unknown or expired');
+      for (const [name, value] of Object.entries(reportLinkHeaders)) missing.headers.set(name, value);
+      return missing;
+    }
+    if (file.kind === 'redirect') {
+      return new Response(null, { status: 302, headers: { ...reportLinkHeaders, location: file.url } });
+    }
+    return new Response(file.bytes, {
+      status: 200,
+      headers: {
+        ...reportLinkHeaders,
+        'content-type': 'application/pdf',
+        'content-disposition': 'inline; filename="tempo-report.pdf"',
+      },
+    });
   });
 
   app.notFound(() => errorResponse('not_found', 'Route not found'));

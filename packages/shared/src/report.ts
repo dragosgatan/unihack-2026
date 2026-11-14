@@ -51,6 +51,7 @@ export const sessionReportSchema = z.object({
   aiItems: z.array(reportAiItemSchema),
   aiSummary: reportAiSummarySchema,
   notifiedAt: isoDateTimeSchema.optional(),
+  pdfKey: z.string().min(1).optional(),
 });
 
 export type ReportSkip = z.infer<typeof reportSkipSchema>;

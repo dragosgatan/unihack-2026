@@ -4,6 +4,7 @@ import { metricRangeSchema, routes, type RouteDefinition, type Side } from '@tem
 import { buildSeed } from '../mock/seed/build.ts';
 import { fingerTappingSubmission } from '../mock/testing.ts';
 import { call, expectOk, fixedNow, type Harness, type HarnessFactory, type Result } from './harness.ts';
+import { storeReport } from './reports.ts';
 
 const seedPatientIds = ['pat-1', 'pat-2', 'pat-3'];
 const sides: Side[] = ['left', 'right'];
@@ -134,6 +135,13 @@ export const contractSuite = (factory: HarnessFactory): void => {
         await call(h.app, `${base}/${proposed?.id}/decision`, { method: 'POST', body: { status: 'dismissed' } }),
       );
       expect(decided.suggestion).toMatchObject({ id: proposed?.id, status: 'dismissed', decidedAt: fixedNow.toISOString() });
+    });
+
+    it('GET /api/sessions/:sessionId/report and POST its link', async () => {
+      const report = await storeReport(h, 'pat-2-sess-001', { withPdf: true });
+      const path = `/api/sessions/${report.sessionId}/report`;
+      expect(expectValid(routes.getSessionReport, await call(h.app, path))).toEqual(report);
+      expectValid(routes.createReportLink, await call(h.app, `${path}/link`, { method: 'POST' }));
     });
 
     it('covers every route in the shared table', () => {

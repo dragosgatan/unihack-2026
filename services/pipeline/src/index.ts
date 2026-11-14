@@ -4,6 +4,9 @@ export type { Ai, AiProvider, AssistantTurnInput, AssistantTurnOutput, Media } f
 export { createPipelineAi } from './ai-port.ts';
 export type { ItemScoringInput, ItemScoringOutput, PipelineAi, SessionSummaryInput } from './ai-port.ts';
 export { logEmail } from './email.ts';
-export type { Email, PipelineDeps, PipelineStore, PointWrite, SendEmail } from './ports.ts';
+export type { Email, PipelineDeps, PipelineStore, PointWrite, ReportFiles, SendEmail } from './ports.ts';
+export { createMemoryReportFiles, reportPdfKey } from './report-files.ts';
+export type { MemoryReportFiles, StoredReportPdf } from './report-files.ts';
+export { createReportLink } from './report-link.ts';
 export type { NotifyOutput } from './steps/notify.ts';
 export type { PipelineInput } from './state.ts';

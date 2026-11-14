@@ -23,6 +23,7 @@ beforeAll(() => {
   mkdirSync(join(webDistDir, 'assets'), { recursive: true });
   writeFileSync(join(apiBundleDir, 'lambda.mjs'), 'export const handler = async () => ({});');
   for (const { file } of pipelineSteps) writeFileSync(join(pipelineBundleDir, `${file}.mjs`), 'export const handler = async () => ({});');
+  writeFileSync(join(pipelineBundleDir, 'reminders.mjs'), 'export const handler = async () => ({});');
   writeFileSync(join(webDistDir, 'index.html'), '<!doctype html>');
   writeFileSync(join(webDistDir, 'assets', 'x.js'), '');
 });
@@ -215,6 +216,7 @@ describe('TempoStack', () => {
           Variables: {
             TABLE_NAME: Match.anyValue(),
             APP_URL: Match.anyValue(),
+            UPLOADS_BUCKET: { Ref: Match.stringLikeRegexp('^Uploads') },
             AI_PROVIDER: 'mock',
             REPORT_SENDER: Match.absent(),
           },
@@ -309,6 +311,25 @@ describe('TempoStack', () => {
     });
   });
 
+  it('lets only the Report step put objects in the uploads bucket, and only report PDFs', () => {
+    type Statement = { Action: unknown; Resource: unknown };
+    type Policy = { Properties: { Roles: { Ref: string }[]; PolicyDocument: { Statement: Statement[] } } };
+    const policies = Object.values(template.findResources('AWS::IAM::Policy')) as Policy[];
+    const pipelineS3 = policies
+      .filter((policy) => policy.Properties.Roles.some((role) => role.Ref.startsWith('Pipeline')))
+      .flatMap((policy) =>
+        policy.Properties.PolicyDocument.Statement.filter((statement) => JSON.stringify(statement.Action).includes('s3:')).map(
+          (statement) => ({ role: policy.Properties.Roles[0]?.Ref, statement }),
+        ),
+      );
+    expect(pipelineS3).toHaveLength(1);
+    expect(pipelineS3[0]?.role).toMatch(/^PipelineReportFunctionServiceRole/);
+    expect(pipelineS3[0]?.statement.Action).toBe('s3:PutObject');
+    expect(pipelineS3[0]?.statement.Resource).toEqual({
+      'Fn::Join': ['', [{ 'Fn::GetAtt': [expect.stringMatching(/^Uploads/), 'Arn'] }, '/reports/*']],
+    });
+  });
+
   it('blocks public access on both buckets', () => {
     const buckets = template.findResources('AWS::S3::Bucket');
     expect(Object.keys(buckets)).toHaveLength(2);
@@ -375,5 +396,73 @@ describe('TempoStack', () => {
           webDistDir,
         }),
     ).toThrow(/score\.mjs.*npm run build/);
+  });
+
+  it('runs the reminders as one Node.js 22 ARM64 Lambda with one retry and no Gemini key', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Runtime: 'nodejs22.x',
+      Architectures: ['arm64'],
+      Handler: 'reminders.handler',
+      Environment: {
+        Variables: {
+          TABLE_NAME: Match.anyValue(),
+          APP_URL: Match.anyValue(),
+          REPORT_SENDER: Match.absent(),
+          GEMINI_SECRET_ARN: Match.absent(),
+        },
+      },
+    });
+    template.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+      FunctionName: { Ref: Match.stringLikeRegexp('^RemindersFunction') },
+      MaximumRetryAttempts: 1,
+    });
+    template.hasOutput('RemindersFunctionName', { Value: { Ref: Match.stringLikeRegexp('^RemindersFunction') } });
+  });
+
+  it('schedules the check-in at 09:00 and missed sessions at 18:00 Bucharest time, each with its kind', () => {
+    template.resourceCountIs('AWS::Scheduler::Schedule', 2);
+    for (const [hour, kind] of [
+      ['9', 'check-in'],
+      ['18', 'missed-sessions'],
+    ] as const) {
+      template.hasResourceProperties('AWS::Scheduler::Schedule', {
+        ScheduleExpression: `cron(0 ${hour} * * ? *)`,
+        ScheduleExpressionTimezone: 'Europe/Bucharest',
+        FlexibleTimeWindow: { Mode: 'OFF' },
+        State: 'ENABLED',
+        Target: Match.objectLike({
+          Arn: { 'Fn::GetAtt': [Match.stringLikeRegexp('^RemindersFunction'), 'Arn'] },
+          Input: JSON.stringify({ kind }),
+          RetryPolicy: Match.objectLike({ MaximumRetryAttempts: 1 }),
+        }),
+      });
+    }
+  });
+
+  it('lets the reminders send email through SES only when a sender is configured', () => {
+    const withSender = synth({ reportSender: 'reports@example.test' });
+    withSender.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'reminders.handler',
+      Environment: { Variables: { REPORT_SENDER: 'reports@example.test' } },
+    });
+    withSender.hasResourceProperties('AWS::IAM::Policy', {
+      Roles: [{ Ref: Match.stringLikeRegexp('^RemindersFunctionServiceRole') }],
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: 'ses:SendEmail' })]) },
+    });
+  });
+
+  it('fails with a clear error when the reminders bundle is missing', () => {
+    const partial = join(root, 'pipeline-without-reminders');
+    mkdirSync(partial, { recursive: true });
+    for (const { file } of pipelineSteps) writeFileSync(join(partial, `${file}.mjs`), '');
+    expect(
+      () =>
+        new TempoStack(new App(), 'TempoStack', {
+          env: { region: 'eu-central-1' },
+          apiBundleDir,
+          pipelineBundleDir: partial,
+          webDistDir,
+        }),
+    ).toThrow(/reminders\.mjs.*npm run build/);
   });
 });

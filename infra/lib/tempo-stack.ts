@@ -8,6 +8,7 @@ import { Api } from './api.ts';
 import { Auth } from './auth.ts';
 import { DeployRole } from './deploy-role.ts';
 import { Pipeline, pipelineSteps } from './pipeline.ts';
+import { Reminders } from './reminders.ts';
 import { Web } from './web.ts';
 
 export interface TempoStackProps extends StackProps {
@@ -31,6 +32,7 @@ export class TempoStack extends Stack {
     requireBuildOutput(props.apiBundleDir, 'lambda.mjs');
     for (const { file } of pipelineSteps) requireBuildOutput(props.pipelineBundleDir, `${file}.mjs`);
     requireBuildOutput(props.webDistDir, 'index.html');
+    requireBuildOutput(props.pipelineBundleDir, 'reminders.mjs');
 
     const table = new Table(this, 'Table', {
       partitionKey: { name: 'pk', type: AttributeType.STRING },
@@ -72,7 +74,7 @@ export class TempoStack extends Stack {
       allowedHeaders: ['*'],
     });
 
-    const pipeline = new Pipeline(this, 'Pipeline', { bundleDir: props.pipelineBundleDir, table, appUrl });
+    const pipeline = new Pipeline(this, 'Pipeline', { bundleDir: props.pipelineBundleDir, table, appUrl, uploads });
     api.handler.addEnvironment('STATE_MACHINE_ARN', pipeline.stateMachine.stateMachineArn);
     pipeline.stateMachine.grantStartExecution(api.handler);
     api.handler.addEnvironment('AI_PROVIDER', pipeline.aiProvider);
@@ -88,5 +90,8 @@ export class TempoStack extends Stack {
     new CfnOutput(this, 'UserPoolClientId', { value: auth.webClient.userPoolClientId });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'UploadsBucketName', { value: uploads.bucketName });
+
+    const reminders = new Reminders(this, 'Reminders', { bundleDir: props.pipelineBundleDir, table, appUrl });
+    new CfnOutput(this, 'RemindersFunctionName', { value: reminders.handler.functionName });
   }
 }

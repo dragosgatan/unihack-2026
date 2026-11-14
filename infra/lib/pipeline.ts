@@ -3,6 +3,7 @@ import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import type { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Secret, type ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import {
   DefinitionBody,
@@ -29,6 +30,7 @@ export interface PipelineProps {
   bundleDir: string;
   table: ITable;
   appUrl: string;
+  uploads: IBucket;
 }
 
 export class Pipeline extends Construct {
@@ -68,6 +70,7 @@ export class Pipeline extends Construct {
         environment: {
           TABLE_NAME: props.table.tableName,
           APP_URL: props.appUrl,
+          UPLOADS_BUCKET: props.uploads.bucketName,
           AI_PROVIDER: aiProvider,
           ...(usesAi ? { GEMINI_SECRET_ARN: geminiKey.secretArn } : {}),
           ...(sender ? { REPORT_SENDER: sender } : {}),
@@ -75,6 +78,11 @@ export class Pipeline extends Construct {
       });
       props.table.grantReadWriteData(handler);
       if (usesAi) geminiKey.grantRead(handler);
+      if (stepId === 'Report') {
+        handler.addToRolePolicy(
+          new PolicyStatement({ actions: ['s3:PutObject'], resources: [props.uploads.arnForObjects('reports/*')] }),
+        );
+      }
       if (sender) {
         handler.addToRolePolicy(
           new PolicyStatement({

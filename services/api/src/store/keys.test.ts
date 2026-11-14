@@ -9,6 +9,7 @@ import {
   flagKey,
   flagPrefix,
   institutionKey,
+  institutionListIndexKey,
   keyOfFlag,
   latestKey,
   painAlertKey,
@@ -19,7 +20,9 @@ import {
   pointKey,
   pointPrefix,
   recordKey,
+  reminderKey,
   reportKey,
+  reportLinkKey,
   resultKey,
   sessionIndexKey,
   sessionKey,
@@ -117,5 +120,25 @@ describe('table keys', () => {
 
   it('keeps the pain alert marker under the session', () => {
     expect(painAlertKey('sess-1')).toEqual({ pk: 'SESSION#sess-1', sk: 'PAIN_ALERT' });
+  });
+
+  it('lists every institution under one index partition', () => {
+    expect(institutionListIndexKey('inst-1')).toEqual({ gsi1pk: 'INSTITUTIONS', gsi1sk: 'inst-1' });
+    expect(institutionListIndexKey('inst-1').gsi1pk).not.toBe(staffIndexKey('inst-1', 'sub-1').gsi1pk);
+  });
+
+  it('keeps one reminder marker per patient, kind and occurrence', () => {
+    expect(reminderKey('pat-1', 'check-in', '2026-11-13')).toEqual({
+      pk: 'PATIENT#pat-1',
+      sk: 'REMINDER#check-in#2026-11-13',
+    });
+    expect(reminderKey('pat-1', 'missed-session', '2026-11-13')).not.toEqual(
+      reminderKey('pat-1', 'check-in', '2026-11-13'),
+    );
+  });
+
+  it('keeps each report link in its own partition by token', () => {
+    expect(reportLinkKey('abc_-9')).toEqual({ pk: 'REPORTLINK#abc_-9', sk: 'META' });
+    expect(reportLinkKey('abc').pk).not.toBe(reportKey('abc').pk);
   });
 });

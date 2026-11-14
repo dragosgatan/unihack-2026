@@ -1,16 +1,25 @@
 import type { SessionStatus } from '@tempo/shared';
 import { requireSession, sessionLink, type Email, type PipelineDeps } from '../ports.ts';
+import { createReportLink } from '../report-link.ts';
 import type { PipelineInput } from '../state.ts';
 
 export type NotifyOutput = PipelineInput & { status: SessionStatus; notified: boolean };
 
-export const reportEmail = (to: string, appUrl: string, sessionId: string): Email => ({
+export const emailReportLinkHours = 72;
+
+export const reportEmail = (to: string, appUrl: string, sessionId: string, pdfPath?: string): Email => ({
   to,
   subject: 'Tempo: a session report is ready',
   text: [
     'A session report is ready for you to review.',
     sessionLink(appUrl, sessionId),
     'Sign in to Tempo to see the report. This email contains no patient details.',
+    ...(pdfPath === undefined
+      ? []
+      : [
+          `The PDF report opens from this link for ${emailReportLinkHours} hours:`,
+          `${appUrl.replace(/\/+$/, '')}${pdfPath}`,
+        ]),
   ].join('\n\n'),
 });
 
@@ -27,7 +36,10 @@ export const notify = async (
     const detail = await store.getPatientDetail(session.patientId);
     const attending = detail && (await store.getStaff(detail.patient.attendingId));
     if (attending) {
-      await sendEmail(reportEmail(attending.email, appUrl, sessionId));
+      const pdfLink = report.pdfKey
+        ? await createReportLink(store, sessionId, clock(), emailReportLinkHours * 60 * 60_000)
+        : undefined;
+      await sendEmail(reportEmail(attending.email, appUrl, sessionId, pdfLink?.url));
       await store.putReport({ ...report, notifiedAt: clock().toISOString() });
       notified = true;
     } else {

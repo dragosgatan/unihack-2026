@@ -4,6 +4,7 @@ import { aiFromEnv } from '../ai/index.ts';
 import { createPipelineAi, type PipelineAi } from '../ai-port.ts';
 import { logEmail } from '../email.ts';
 import type { PipelineDeps } from '../ports.ts';
+import { createS3ReportFiles } from '../s3-report-files.ts';
 import { createSesEmail } from '../ses-email.ts';
 
 const requiredEnv = (name: string): string => {
@@ -34,4 +35,5 @@ export const deps: PipelineDeps = {
   sendEmail: sender ? createSesEmail(sender) : logEmail,
   clock,
   appUrl: requiredEnv('APP_URL'),
+  reportFiles: createS3ReportFiles(requiredEnv('UPLOADS_BUCKET')),
 };

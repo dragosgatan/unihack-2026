@@ -43,6 +43,7 @@ export const buildParkinsonsPatient = (now: Date): PatientSeed => {
     attendingId: attending.id,
     therapistIds: [],
     createdAt: daysBefore(now, 95, 9).toISOString(),
+    reminderEmail: 'elena.dorian@example.test',
   };
 
   const record: MedicalRecord = {

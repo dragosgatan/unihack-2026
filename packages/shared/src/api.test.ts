@@ -20,10 +20,14 @@ import {
   patientMetricsResponseSchema,
   patientParamsSchema,
   patientSessionListResponseSchema,
+  reportLinkParamsSchema,
+  reportLinkResponseSchema,
+  reportLinkUrl,
   revokeDeviceResponseSchema,
   routes,
   sessionCodeSchema,
   sessionParamsSchema,
+  sessionReportResponseSchema,
   startHomeSessionResponseSchema,
   submitSessionRequestSchema,
   submitSessionResponseSchema,
@@ -222,6 +226,52 @@ describe('GET /api/patients/:patientId/flags', () => {
     ];
     expect(flagListResponseSchema.safeParse({ flags }).success).toBe(true);
     expect(flagListResponseSchema.safeParse({ flags: [{ ...base, id: 'flag-4', kind: 'bad-day' }] }).success).toBe(false);
+  });
+});
+
+describe('GET /api/sessions/:sessionId/report', () => {
+  it('returns the stored report with its optional PDF key', () => {
+    const report = {
+      sessionId: session.id,
+      patientId: patient.id,
+      generatedAt: '2026-11-13T10:30:00.000Z',
+      skipped: [],
+      scores: [],
+      aiItems: [],
+      aiSummary: {
+        label: 'ai-generated',
+        summary: 'All scores were within the own range.',
+        claims: [],
+        ai: {
+          model: 'stub',
+          promptVersion: 'session-summary@1',
+          inputRef: `session:${session.id}`,
+          provider: 'mock',
+          createdAt: '2026-11-13T10:30:00.000Z',
+        },
+      },
+    };
+    expect(sessionReportResponseSchema.safeParse(report).success).toBe(true);
+    const withPdf = { ...report, pdfKey: `reports/${patient.id}/${session.id}.pdf` };
+    expect(sessionReportResponseSchema.parse(withPdf).pdfKey).toBe(withPdf.pdfKey);
+    expect(sessionReportResponseSchema.safeParse({ ...report, pdfKey: '' }).success).toBe(false);
+  });
+});
+
+describe('POST /api/sessions/:sessionId/report/link', () => {
+  const token = 'A'.repeat(42) + '_';
+
+  it('returns a relative report link with its expiry', () => {
+    const response = { url: reportLinkUrl(token), expiresAt: '2026-11-13T10:35:00.000Z' };
+    expect(response.url).toBe(`/api/report-links/${token}`);
+    expect(reportLinkResponseSchema.safeParse(response).success).toBe(true);
+    expect(reportLinkResponseSchema.safeParse({ ...response, url: 'https://elsewhere.test/x' }).success).toBe(false);
+  });
+
+  it('only accepts a 32-byte base64url token in the link', () => {
+    expect(reportLinkParamsSchema.safeParse({ token }).success).toBe(true);
+    expect(reportLinkParamsSchema.safeParse({ token: token.slice(1) }).success).toBe(false);
+    expect(reportLinkParamsSchema.safeParse({ token: `${token.slice(1)}=` }).success).toBe(false);
   });
 });
 

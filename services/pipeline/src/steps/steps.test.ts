@@ -13,6 +13,7 @@ import {
   submit,
   tappingResult,
   tappingTrial,
+  type Fixture,
 } from '../testing.ts';
 import { aiItems } from './ai-items.ts';
 import { compare } from './compare.ts';
@@ -22,6 +23,14 @@ import { report } from './report.ts';
 import { score } from './score.ts';
 
 const tapsPerSecond = 'finger-tapping.taps-per-second';
+
+const dropPdfKey = async (store: Fixture['store']): Promise<void> => {
+  const stored = await store.getReport('sess-1');
+  if (!stored?.pdfKey) throw new Error('Expected a report with a PDF');
+  const { pdfKey, ...withoutPdf } = stored;
+  expect(pdfKey).toBe('reports/pat-1/sess-1.pdf');
+  await store.putReport(withoutPdf);
+};
 
 describe('score', () => {
   it('stores code scores on the result and writes one point per metric and side', async () => {
@@ -232,6 +241,52 @@ describe('report', () => {
     expect(summarize).not.toHaveBeenCalled();
     expect(await store.getReport('sess-1')).toEqual(first);
   });
+
+  it('renders the PDF with the metric history, stores it under the patient and session and keeps its key', async () => {
+    const { store, deps, reportFiles } = await fixture();
+    await history(store, tapsPerSecond, 'right', [4, 4, 4]);
+    await submit(store, 'sess-1', [rightTapsPerSecond(day(10), 2), painSkip(day(10, 11))]);
+    await score(deps, { sessionId: 'sess-1' });
+    const listPoints = vi.spyOn(store, 'listPoints');
+    await report(deps, await compare(deps, { sessionId: 'sess-1', aiItems: [] }));
+
+    const stored = await store.getReport('sess-1');
+    expect(stored?.pdfKey).toBe('reports/pat-1/sess-1.pdf');
+    const file = await reportFiles.open('reports/pat-1/sess-1.pdf');
+    expect(Buffer.from(file?.bytes.subarray(0, 5) ?? []).toString('latin1')).toBe('%PDF-');
+    expect(listPoints).toHaveBeenCalledWith(patient.id, tapsPerSecond, 'right', {
+      from: '2026-05-10T10:00:00.000Z',
+      to: day(10),
+    });
+  });
+
+  it('renders and stores the PDF once when it runs twice', async () => {
+    const { store, deps, reportFiles } = await fixture();
+    await submit(store, 'sess-1', [rightTapsPerSecond(day(10), 4)]);
+    const compared = await compare(deps, { sessionId: 'sess-1', aiItems: [] });
+    const put = vi.spyOn(reportFiles, 'put');
+    await report(deps, compared);
+    const first = await store.getReport('sess-1');
+
+    await report(deps, compared);
+
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(await store.getReport('sess-1')).toEqual(first);
+  });
+
+  it('leaves a report stored before PDFs existed as it is', async () => {
+    const { store, deps, reportFiles } = await fixture();
+    await submit(store, 'sess-1', [rightTapsPerSecond(day(10), 4)]);
+    const compared = await compare(deps, { sessionId: 'sess-1', aiItems: [] });
+    await report(deps, compared);
+    await dropPdfKey(store);
+    const put = vi.spyOn(reportFiles, 'put');
+
+    await report(deps, compared);
+
+    expect(put).not.toHaveBeenCalled();
+    expect((await store.getReport('sess-1'))?.pdfKey).toBeUndefined();
+  });
 });
 
 describe('notify', () => {
@@ -257,6 +312,30 @@ describe('notify', () => {
     expect(JSON.stringify(emails)).not.toContain(patient.name);
     expect(JSON.stringify(emails)).not.toContain(patient.institutionPatientId);
     expect((await store.getSession('sess-1'))?.status).toBe('processed');
+  });
+
+  it('adds a link to the PDF that works for 72 hours, once, without patient details', async () => {
+    const { store, deps, emails } = await reported([rightTapsPerSecond(day(10), 4)]);
+    await notify(deps, { sessionId: 'sess-1' });
+    await notify(deps, { sessionId: 'sess-1' });
+
+    const text = emails[0]?.text ?? '';
+    const links = [...text.matchAll(/https:\/\/tempo\.example\.test\/api\/report-links\/([A-Za-z0-9_-]{43})/g)];
+    expect(links).toHaveLength(1);
+    expect(text).toContain('72 hours');
+    expect(text).toContain('This email contains no patient details.');
+    const token = links[0]?.[1] ?? '';
+    const expiresAt = new Date(now.getTime() + 72 * 60 * 60_000).toISOString();
+    expect(await store.getReportLink(token, now)).toEqual({ token, sessionId: 'sess-1', expiresAt });
+    expect(await store.getReportLink(token, new Date(expiresAt))).toBeUndefined();
+  });
+
+  it('leaves the PDF line out when the report has no PDF', async () => {
+    const { store, deps, emails } = await reported([rightTapsPerSecond(day(10), 4)]);
+    await dropPdfKey(store);
+    await notify(deps, { sessionId: 'sess-1' });
+    expect(emails[0]?.text).not.toContain('report-links');
+    expect(emails[0]?.text).toContain('https://tempo.example.test/clinician/sessions/sess-1');
   });
 
   it('reports a session with a skipped activity as completed with skips and leaves its status alone', async () => {

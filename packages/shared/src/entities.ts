@@ -28,6 +28,7 @@ export const patientSchema = z.object({
   attendingId: idSchema,
   therapistIds: z.array(idSchema),
   createdAt: isoDateTimeSchema,
+  reminderEmail: z.email().optional(),
 });
 
 export const auditEntityTypeSchema = z.enum([

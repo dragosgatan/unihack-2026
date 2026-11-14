@@ -27,6 +27,7 @@ export const buildStrokePatient = (now: Date): PatientSeed => {
     attendingId: attending.id,
     therapistIds: [therapist.id],
     createdAt: daysBefore(now, 96, 10).toISOString(),
+    reminderEmail: 'vasile.petrescu@example.test',
   };
 
   const record: MedicalRecord = {

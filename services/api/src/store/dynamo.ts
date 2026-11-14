@@ -19,6 +19,7 @@ import {
   baselineSchema,
   checkInEntrySchema,
   flagSchema,
+  institutionSchema,
   isoDateTimeSchema,
   medicalRecordSchema,
   metricIdSchema,
@@ -48,6 +49,8 @@ import {
   devicePrefix,
   flagPrefix,
   institutionKey,
+  institutionListIndexKey,
+  institutionListPk,
   institutionPk,
   keyOfFlag,
   latestKey,
@@ -63,7 +66,9 @@ import {
   pointPrefix,
   publicDataKey,
   recordKey,
+  reminderKey,
   reportKey,
+  reportLinkKey,
   resultKey,
   resultPrefix,
   sessionIndexKey,
@@ -80,7 +85,7 @@ import {
 } from './keys.ts';
 import { storedCheckIns, storedResults, storedSkips } from './submission.ts';
 import { newestFirst } from './suggestions.ts';
-import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
+import type { CodeEntry, MetricValue, PublicDataEntry, ReportLink, Store } from './types.ts';
 
 type Item = Record<string, unknown>;
 type WriteRequests = NonNullable<BatchWriteCommandInput['RequestItems']>[string];
@@ -99,6 +104,12 @@ const codeEntrySchema = z.discriminatedUnion('kind', [
   z.object({ ...codeFields, kind: z.literal('session'), sessionId: z.string().min(1) }),
   z.object({ ...codeFields, kind: z.literal('pairing'), patientId: z.string().min(1) }),
 ]);
+
+const reportLinkSchema = z.object({
+  token: z.string().min(1),
+  sessionId: z.string().min(1),
+  expiresAt: isoDateTimeSchema,
+});
 
 const publicDataEntrySchema = z.object({
   kind: z.enum(['rxnorm', 'icd10', 'openfda-label']),
@@ -377,7 +388,8 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
       return (await queryBetween(patientPk(patientId), low, high)).map((item) => skipEventSchema.parse(dataOf(item)));
     },
 
-    putInstitution: (institution) => put({ ...institutionKey(institution.id), data: institution }),
+    putInstitution: (institution) =>
+      put({ ...institutionKey(institution.id), ...institutionListIndexKey(institution.id), data: institution }),
 
     putStaff: (staff) => put({ ...staffKey(staff.id), ...staffIndexKey(staff.institutionId, staff.id), data: staff }),
 
@@ -575,6 +587,43 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
     getAssistantTurn: async (turnId) => {
       const item = await get(assistantTurnKey(turnId));
       return item && assistantTurnRecordSchema.parse(dataOf(item));
+    },
+
+    listInstitutions: async () => {
+      const items = await queryAll({
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        ExpressionAttributeValues: { ':pk': institutionListPk },
+      });
+      return items.map((item) => institutionSchema.parse(dataOf(item)));
+    },
+
+    claimReminder: async (patientId, kind, occurrence, keepUntil) => {
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { ...reminderKey(patientId, kind, occurrence), ttl: Math.floor(Date.parse(keepUntil) / 1000) },
+            ConditionExpression: 'attribute_not_exists(pk)',
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    releaseReminder: async (patientId, kind, occurrence) => {
+      await client.send(new DeleteCommand({ TableName: tableName, Key: reminderKey(patientId, kind, occurrence) }));
+    },
+
+    putReportLink: (link) =>
+      put({ ...reportLinkKey(link.token), ttl: Math.ceil(Date.parse(link.expiresAt) / 1000), data: link }),
+
+    getReportLink: async (token, now): Promise<ReportLink | undefined> => {
+      const parsed = reportLinkSchema.safeParse(dataOf(await get(reportLinkKey(token))));
+      return parsed.success && parsed.data.expiresAt > now.toISOString() ? parsed.data : undefined;
     },
   };
 };

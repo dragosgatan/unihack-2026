@@ -1,5 +1,5 @@
 import type { ActivityId, Flag, MetricId, Side, SkipFlag } from '@tempo/shared';
-import type { PublicDataKind } from './types.ts';
+import type { PublicDataKind, ReminderKind } from './types.ts';
 
 export type Key = { pk: string; sk: string };
 export type IndexKey = { gsi1pk: string; gsi1sk: string };
@@ -135,3 +135,16 @@ export const checkInRange = (from: string, to: string): [string, string] => [
   `${checkInPrefix}${from}`,
   `${checkInPrefix}${to}#￿`,
 ];
+
+export const institutionListPk = 'INSTITUTIONS';
+export const institutionListIndexKey = (institutionId: string): IndexKey => ({
+  gsi1pk: institutionListPk,
+  gsi1sk: institutionId,
+});
+
+export const reminderKey = (patientId: string, kind: ReminderKind, occurrence: string): Key => ({
+  pk: patientPk(patientId),
+  sk: `REMINDER#${kind}#${occurrence}`,
+});
+
+export const reportLinkKey = (token: string): Key => ({ pk: `REPORTLINK#${token}`, sk: meta });

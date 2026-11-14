@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAi, type AiProvider } from '@tempo/pipeline';
+import { createAi, createMemoryReportFiles, type AiProvider } from '@tempo/pipeline';
 import { routes, runningActivityActionIds } from '@tempo/shared';
 import { createMockStaffAuth } from './auth/staff.ts';
 import { signSessionToken } from './auth/device-tokens.ts';
@@ -32,6 +32,7 @@ const appWith = (generate: AiProvider['generate']) => {
     startPipeline: async () => {},
     publicData: offlinePublicData,
     ai: createAi({ provider, now: () => fixedNow }),
+    reportFiles: createMemoryReportFiles(),
   });
   return { app, store, toolNames };
 };
