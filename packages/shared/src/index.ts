@@ -5,6 +5,7 @@ export * from './entities.ts';
 export * from './record.ts';
 export * from './session.ts';
 export * from './checkin.ts';
+export * from './exercise.ts';
 export * from './suggestion.ts';
 export * from './metrics.ts';
 export * from './care.ts';

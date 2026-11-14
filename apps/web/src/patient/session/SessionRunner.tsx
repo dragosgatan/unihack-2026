@@ -166,7 +166,11 @@ export function SessionRunner() {
   return (
     <>
       {Module ? (
-        <Module key={key} {...props} config={item.config} />
+        <Module
+          key={key}
+          {...props}
+          config={{ side: item.side, targetRepetitions: item.targetRepetitions, targetAngle: item.targetAngle, ...item.config }}
+        />
       ) : (
         <Placeholder key={key} {...props} config={{ activityId: item.activityId }} />
       )}

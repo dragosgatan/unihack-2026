@@ -1,4 +1,4 @@
-import { PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import { PoseLandmarker, type Landmark, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import wasmLoaderPath from '@mediapipe/tasks-vision/vision_wasm_internal.js?url';
 import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
 import modelAssetPath from './pose_landmarker_lite.task?url';
@@ -8,17 +8,18 @@ export type Delegate = 'GPU' | 'CPU';
 export interface PoseTracking {
   video: HTMLVideoElement;
   signal: AbortSignal;
-  onFrame: (landmarks: NormalizedLandmark[] | undefined) => void;
+  onFrame: (landmarks: NormalizedLandmark[] | undefined, world: Landmark[] | undefined) => void;
   onError: (error: unknown) => void;
   onStatus: OnStatus;
 }
 
 const GPU_START_TIMEOUT_MS = 15_000;
+const MIN_FULL_RATE_FPS = 12;
 
 type OnStatus = (status: string) => void;
 
-async function download(url: string, label: string, totalMb: number, type: string, onStatus: OnStatus) {
-  const response = await fetch(url);
+async function download(url: string, label: string, totalMb: number, type: string, onStatus: OnStatus, signal: AbortSignal) {
+  const response = await fetch(url, { signal });
   if (!response.ok || !response.body) throw new Error(`Download failed (${response.status}): ${url}`);
   const reader = response.body.getReader();
   const chunks: Uint8Array<ArrayBuffer>[] = [];
@@ -91,8 +92,8 @@ export async function startPoseTracking({ video, signal, onFrame, onError, onSta
     onStatus('starting video');
     video.srcObject = stream;
     await video.play();
-    const wasm = await download(wasmBinaryUrl, 'runtime', 11.2, 'application/wasm', onStatus);
-    const model = await download(modelAssetPath, 'model', 5.8, 'application/octet-stream', onStatus);
+    const wasm = await download(wasmBinaryUrl, 'runtime', 11.2, 'application/wasm', onStatus, signal);
+    const model = await download(modelAssetPath, 'model', 5.8, 'application/octet-stream', onStatus, signal);
     const wasmBinaryPath = URL.createObjectURL(wasm);
     const assets = { wasmBinaryPath, model: new Uint8Array(await model.arrayBuffer()) };
     const { landmarker: created, delegate: used } = await createWithCpuFallback(assets, onStatus).finally(() =>
@@ -111,13 +112,28 @@ export async function startPoseTracking({ video, signal, onFrame, onError, onSta
 
   let lastVideoTime = -1;
   let lastTimestamp = 0;
+  let videoFrames = 0;
+  let stride = 1;
+  let detected = 0;
+  let windowStart: number | undefined;
   const tick = () => {
     if (!landmarker) return;
     try {
       if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
-        lastTimestamp = Math.max(performance.now(), lastTimestamp + 1);
-        landmarker.detectForVideo(video, lastTimestamp, (result) => onFrame(result.landmarks[0]));
+        videoFrames += 1;
+        if (videoFrames % stride === 0) {
+          lastTimestamp = Math.max(performance.now(), lastTimestamp + 1);
+          landmarker.detectForVideo(video, lastTimestamp, (result) => onFrame(result.landmarks[0], result.worldLandmarks[0]));
+          detected += 1;
+        }
+        const now = performance.now();
+        // The first detection compiles GPU shaders, so the rate is measured from the frame after it.
+        if (windowStart === undefined || now - windowStart >= 1000) {
+          if (windowStart !== undefined && (detected * 1000) / (now - windowStart) < MIN_FULL_RATE_FPS) stride = 2;
+          detected = 0;
+          windowStart = now;
+        }
       }
     } catch (error) {
       stop();

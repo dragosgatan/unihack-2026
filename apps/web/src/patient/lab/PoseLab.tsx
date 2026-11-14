@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { DrawingUtils, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
-import { jointAngle } from '@tempo/shared/scoring';
+import { DrawingUtils, PoseLandmarker, type Landmark, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+import { jointAngle, poseLandmarks } from '@tempo/shared/scoring';
 import { startPoseTracking, type Delegate } from '../pose/tracker.ts';
 
 const MIN_VISIBILITY = 0.5;
+const recordedIndices = [...Object.values(poseLandmarks.left), ...Object.values(poseLandmarks.right)].sort((a, b) => a - b);
+const fourPlaces = (value: number) => Number(value.toFixed(4));
+
+const recordingRow = (t: number, world: Landmark[]) => [
+  Math.round(t),
+  ...recordedIndices.flatMap((index) => {
+    const p = world[index];
+    return p ? [p.x, p.y, p.z, p.visibility].map(fourPlaces) : [0, 0, 0, 0];
+  }),
+];
 
 function shoulderAngle(landmarks: NormalizedLandmark[], width: number, height: number, shoulder: number, elbow: number, hip: number) {
   const h = landmarks[hip];
@@ -31,10 +41,17 @@ export function PoseLab() {
   const [right, setRight] = useState<number | undefined>();
   const [fps, setFps] = useState(0);
   const [status, setStatus] = useState('');
+  const recording = useRef<number[][]>([]);
+  const [download, setDownload] = useState<string>();
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   const stop = () => {
+    if (recording.current.length > 0) {
+      const json = JSON.stringify({ source: 'recorded', indices: recordedIndices, frames: recording.current });
+      setDownload(URL.createObjectURL(new Blob([json + '\n'], { type: 'application/json' })));
+      recording.current = [];
+    }
     controllerRef.current?.abort();
     controllerRef.current = null;
     const canvas = canvasRef.current;
@@ -54,6 +71,10 @@ export function PoseLab() {
     const drawing = new DrawingUtils(context);
     let frames = 0;
     let windowStart = performance.now();
+    const recordingStart = windowStart;
+    recording.current = [];
+    if (download) URL.revokeObjectURL(download);
+    setDownload(undefined);
 
     const fail = (reason: unknown) => {
       if (controller.signal.aborted) return;
@@ -61,7 +82,8 @@ export function PoseLab() {
       stop();
     };
 
-    const onFrame = (landmarks: NormalizedLandmark[] | undefined) => {
+    const onFrame = (landmarks: NormalizedLandmark[] | undefined, world: Landmark[] | undefined) => {
+      if (world) recording.current.push(recordingRow(performance.now() - recordingStart, world));
       const width = video.videoWidth;
       const height = video.videoHeight;
       if (canvas.width !== width) canvas.width = width;
@@ -105,6 +127,11 @@ export function PoseLab() {
         <button type="button" className="min-h-[60pt] rounded-2xl bg-blue-600 px-6 text-[24pt] font-semibold text-white" onClick={start}>
           Start camera
         </button>
+      )}
+      {download && (
+        <a className="text-blue-600 underline" href={download} download="pose-recording.json">
+          Download landmark recording
+        </a>
       )}
       {error && (
         <p role="alert" className="text-red-600">

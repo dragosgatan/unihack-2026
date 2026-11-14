@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { episodesCheckInSchema, medicationCheckInSchema, painCheckInSchema } from './checkin.ts';
 import { idSchema, sideSchema, type Language } from './common.ts';
+import {
+  shoulderRaiseRawResultSchema,
+  singleLegSquatRawResultSchema,
+  sitToStandRawResultSchema,
+} from './exercise.ts';
 
 export const activityIds = [
   'finger-tapping',
@@ -81,6 +86,9 @@ const rawResultMember = <Id extends ActivityId, Data extends z.ZodType>(activity
 
 export const rawResultSchema = z.discriminatedUnion('activityId', [
   rawResultMember('finger-tapping', fingerTappingRawResultSchema),
+  rawResultMember('shoulder-raise', shoulderRaiseRawResultSchema),
+  rawResultMember('sit-to-stand', sitToStandRawResultSchema),
+  rawResultMember('single-leg-squat', singleLegSquatRawResultSchema),
   rawResultMember('check-in-pain', painCheckInSchema),
   rawResultMember('check-in-medication', medicationCheckInSchema),
   rawResultMember('check-in-episodes', episodesCheckInSchema),
