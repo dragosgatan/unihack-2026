@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { ActivityId, ActivityModuleProps, SessionPlanItem } from '@tempo/shared';
 import type { ActivityProgress } from '../session/runner.ts';
+import { FingerTapping } from './finger-tapping/FingerTapping.tsx';
 
 export type RunnerActivityProps<Config, RawResult> = ActivityModuleProps<Config, RawResult> & {
   onProgress: (progress: ActivityProgress) => void;
@@ -8,4 +9,6 @@ export type RunnerActivityProps<Config, RawResult> = ActivityModuleProps<Config,
 
 export const activityModules: Partial<
   Record<ActivityId, ComponentType<RunnerActivityProps<SessionPlanItem['config'], unknown>>>
-> = {};
+> = {
+  'finger-tapping': FingerTapping,
+};
