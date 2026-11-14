@@ -9,6 +9,7 @@ import { ShoulderRaise, SingleLegSquat, SitToStand } from './exercise/exercises.
 import { FingerTapping } from './finger-tapping/FingerTapping.tsx';
 import { SpiralTracing } from './spiral-tracing/SpiralTracing.tsx';
 import { TrailMakingA, TrailMakingB } from './trail-making/TrailMaking.tsx';
+import { WordRecall } from './word-recall/WordRecall.tsx';
 
 export type RunnerActivityProps<Config, RawResult> = ActivityModuleProps<Config, RawResult> & {
   onProgress: (progress: ActivityProgress) => void;
@@ -22,6 +23,7 @@ export const activityModules: Partial<
   'trail-making-b': TrailMakingB,
   'clock-drawing': ClockDrawing,
   'spiral-tracing': SpiralTracing,
+  'word-recall': WordRecall,
   'shoulder-raise': ShoulderRaise,
   'sit-to-stand': SitToStand,
   'single-leg-squat': SingleLegSquat,

@@ -9,6 +9,7 @@ export { scoreFingerTapping, tapsPerSecond, intervalVariability, decrement } fro
 export { scoreTrailMaking, trailProgress } from './trail-making.ts';
 export { clockDrawingFeatures, clockDrawingSvg, clockStrokesPath, type ClockDrawingFeatures } from './clock-drawing.ts';
 export { scoreSpiralTracing, spiralPath } from './spiral-tracing.ts';
+export { recalledWords, scoreWordRecall } from './word-recall.ts';
 export * from './angle.ts';
 export * from './exercises.ts';
 export * from './pose.ts';

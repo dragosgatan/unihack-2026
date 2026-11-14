@@ -138,4 +138,26 @@ describe('session runner', () => {
       'check-in-episodes',
     ]);
   });
+
+  it('queues the delayed word recall at the end of the plan only after the immediate part completes', () => {
+    const recall = {
+      part: 'immediate',
+      language: 'en',
+      words: ['horse', 'button', 'river', 'lemon', 'purple'],
+      presentedAt: at,
+      recording: { id: 'rec-1', mimeType: 'audio/mp4', durationMs: 9000, bytes: 40000 },
+    };
+    const state = { ...startRunner(redeemed), stage: 'activity' as const };
+    const next = completeActivity(state, completedResult('word-recall', recall, new Date(at)));
+
+    expect(next.plan.items).toHaveLength(3);
+    expect(next.plan.items.at(-1)).toEqual({
+      activityId: 'word-recall',
+      kind: 'test',
+      config: { part: 'delayed', language: 'en', words: recall.words, presentedAt: at },
+    });
+    expect(completedResult('word-recall', { ...recall, part: 'delayed' }, new Date(at))).toBeDefined();
+    expect(completeActivity(next, completedResult('word-recall', { ...recall, part: 'delayed' }, new Date(at))).plan.items).toHaveLength(3);
+    expect(skipActivity(cannotDo(state, { stage: 'task', partialData: recall }), { reason: 'tired' }, new Date(at)).plan.items).toHaveLength(2);
+  });
 });

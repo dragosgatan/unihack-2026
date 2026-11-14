@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { episodesCheckInSchema, medicationCheckInSchema, painCheckInSchema } from './checkin.ts';
-import { idSchema, sideSchema, type Language } from './common.ts';
+import { idSchema, isoDateTimeSchema, languageSchema, sideSchema, type Language } from './common.ts';
 import {
   shoulderRaiseRawResultSchema,
   singleLegSquatRawResultSchema,
@@ -125,6 +125,32 @@ export const spiralTracingRawResultSchema = z.object({
 
 export type SpiralTracingRawResult = z.infer<typeof spiralTracingRawResultSchema>;
 
+export const wordRecallPartSchema = z.enum(['immediate', 'delayed']);
+
+export const wordRecallRecordingSchema = z.object({
+  id: z.string().min(1),
+  mimeType: z.string().min(1),
+  durationMs: z.number().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+});
+
+export const wordRecallRawResultSchema = z.object({
+  part: wordRecallPartSchema,
+  language: languageSchema,
+  words: z.array(z.string().min(1)).length(5),
+  presentedAt: isoDateTimeSchema,
+  recording: wordRecallRecordingSchema,
+});
+
+export const wordRecallDelayedConfigSchema = wordRecallRawResultSchema
+  .pick({ language: true, words: true, presentedAt: true })
+  .extend({ part: z.literal('delayed') });
+
+export type WordRecallPart = z.infer<typeof wordRecallPartSchema>;
+export type WordRecallRecording = z.infer<typeof wordRecallRecordingSchema>;
+export type WordRecallRawResult = z.infer<typeof wordRecallRawResultSchema>;
+export type WordRecallDelayedConfig = z.infer<typeof wordRecallDelayedConfigSchema>;
+
 export const medicationCheckInConfigSchema = z.object({
   medications: z.array(z.object({ medicationId: idSchema, name: z.string().min(1) })),
 });
@@ -140,6 +166,7 @@ export const rawResultSchema = z.discriminatedUnion('activityId', [
   rawResultMember('trail-making-b', trailMakingRawResultSchema),
   rawResultMember('clock-drawing', clockDrawingRawResultSchema),
   rawResultMember('spiral-tracing', spiralTracingRawResultSchema),
+  rawResultMember('word-recall', wordRecallRawResultSchema),
   rawResultMember('shoulder-raise', shoulderRaiseRawResultSchema),
   rawResultMember('sit-to-stand', sitToStandRawResultSchema),
   rawResultMember('single-leg-squat', singleLegSquatRawResultSchema),

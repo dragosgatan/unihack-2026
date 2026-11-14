@@ -15,10 +15,13 @@ let opening: Promise<IDBDatabase> | undefined;
 
 const database = () =>
   (opening ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open('tempo-patient', 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore('runner');
-      request.result.createObjectStore('outbox', { keyPath: 'sessionId' });
+    const request = indexedDB.open('tempo-patient', 2);
+    request.onupgradeneeded = ({ oldVersion }) => {
+      if (oldVersion < 1) {
+        request.result.createObjectStore('runner');
+        request.result.createObjectStore('outbox', { keyPath: 'sessionId' });
+      }
+      request.result.createObjectStore('recordings');
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -46,6 +49,13 @@ export async function loadRunner(): Promise<RunnerState | undefined> {
 export async function saveRunner(state: RunnerState) {
   const tx = (await database()).transaction('runner', 'readwrite');
   tx.objectStore('runner').put(state, currentKey);
+  await transactionDone(tx);
+}
+
+// shortcut: recordings stay on the device until an audio upload route exists; sync must upload and then delete them.
+export async function saveRecording(id: string, audio: Blob) {
+  const tx = (await database()).transaction('recordings', 'readwrite');
+  tx.objectStore('recordings').put(audio, id);
   await transactionDone(tx);
 }
 

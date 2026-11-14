@@ -5,9 +5,11 @@ import {
   submittedResultSchema,
   type ActivityId,
   type DeviceSessionCodeResponse,
+  type SessionPlanItem,
   type SkippedResult,
   type SubmitSessionRequest,
   type SubmittedResult,
+  type WordRecallDelayedConfig,
 } from '@tempo/shared';
 
 const progressSchema = z.object({ stage: skipStageSchema, partialData: z.unknown().optional() });
@@ -43,8 +45,16 @@ export const completedResult = (activityId: ActivityId, data: unknown, completed
   return parsed.success ? parsed.data : undefined;
 };
 
+const followUps = (result: SubmittedResult | undefined): SessionPlanItem[] => {
+  if (result?.status !== 'completed' || result.raw.activityId !== 'word-recall' || result.raw.data.part !== 'immediate') return [];
+  const { language, words, presentedAt } = result.raw.data;
+  const config: WordRecallDelayedConfig = { part: 'delayed', language, words, presentedAt };
+  return [{ activityId: 'word-recall', kind: 'test', config }];
+};
+
 export const completeActivity = (state: RunnerState, result: SubmittedResult | undefined): RunnerState => ({
   ...state,
+  plan: { ...state.plan, items: [...state.plan.items, ...followUps(result)] },
   stage: 'between',
   index: state.index + 1,
   results: result ? [...state.results, result] : state.results,
