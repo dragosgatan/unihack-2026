@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { wordRecallRawResultSchema, type WordRecallDelayedConfig } from '@tempo/shared';
+import { wordRecallRawResultSchema, type Language, type WordRecallDelayedConfig } from '@tempo/shared';
 import { completedResult, type ActivityProgress } from '../../session/runner.ts';
 import { saveRecording } from '../../session/store.ts';
 import { press } from '../check-in-test-helpers.ts';
@@ -48,26 +48,31 @@ afterEach(() => {
 const flush = () => act(async () => {});
 const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 
-const speakAndFinish = async () => {
-  press('Speak');
-  await flush();
-  press("I've finished");
+const labels = {
+  en: { next: 'Next', listen: 'Listen', speak: 'Speak', finished: "I've finished" },
+  ro: { next: 'Înainte', listen: 'Ascultă', speak: 'Vorbește', finished: 'Am terminat' },
 };
 
-const setup = (config: Record<string, unknown> = {}) => {
+const speakAndFinish = async (language: Language = 'en') => {
+  press(labels[language].speak);
+  await flush();
+  press(labels[language].finished);
+};
+
+const setup = (config: Record<string, unknown> = {}, language: Language = 'en') => {
   const onComplete = vi.fn();
   const progress: ActivityProgress[] = [];
-  const view = render(<WordRecall config={config} language="en" onComplete={onComplete} onProgress={(value) => progress.push(value)} />);
+  const view = render(<WordRecall config={config} language={language} onComplete={onComplete} onProgress={(value) => progress.push(value)} />);
   return { onComplete, progress, view };
 };
 
-const startTask = async () => {
-  const context = setup();
-  press('Next');
-  press('Listen');
+const startTask = async (language: Language = 'en') => {
+  const context = setup({}, language);
+  press(labels[language].next);
+  press(labels[language].listen);
   wait(4500);
-  await speakAndFinish();
-  press('Listen');
+  await speakAndFinish(language);
+  press(labels[language].listen);
   wait(9000);
   return context;
 };
@@ -79,7 +84,7 @@ describe('WordRecall', () => {
 
     const raw = wordRecallRawResultSchema.parse(onComplete.mock.calls[0]?.[0]);
     expect(raw).toMatchObject({ part: 'immediate', language: 'en', recording: { mimeType: 'audio/mp4', bytes: 5 } });
-    expect(wordLists).toContainEqual(raw.words);
+    expect(wordLists.en).toContainEqual(raw.words);
     expect(saveRecording).toHaveBeenCalledOnce();
     expect(saveRecording).toHaveBeenCalledWith(raw.recording.id, expect.any(Blob));
     expect(progress.map((value) => value.stage)).toEqual(['practice', 'task', 'task']);
@@ -100,7 +105,7 @@ describe('WordRecall', () => {
   });
 
   it('rests until five minutes have passed, then asks for the same words again', async () => {
-    const words = wordLists[1] ?? [];
+    const words = wordLists.en[1] ?? [];
     const config: WordRecallDelayedConfig = {
       part: 'delayed',
       language: 'en',
@@ -114,6 +119,24 @@ describe('WordRecall', () => {
     await speakAndFinish();
 
     expect(wordRecallRawResultSchema.parse(onComplete.mock.calls[0]?.[0])).toMatchObject({ part: 'delayed', words });
+  });
+
+  it('plays a Romanian list in Romanian and reports that language with the words played', async () => {
+    const spoken: { text: string; lang: string }[] = [];
+    vi.stubGlobal('SpeechSynthesisUtterance', class {
+      lang = '';
+      constructor(public text: string) {}
+    });
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak: (utterance: { text: string; lang: string }) => spoken.push(utterance) });
+    const { onComplete } = await startTask('ro');
+    await speakAndFinish('ro');
+
+    const raw = wordRecallRawResultSchema.parse(onComplete.mock.calls[0]?.[0]);
+    expect(raw.language).toBe('ro');
+    expect(wordLists.ro).toContainEqual(raw.words);
+    const played = spoken.filter((utterance) => raw.words.includes(utterance.text));
+    expect(played.map((utterance) => utterance.text)).toEqual(raw.words);
+    expect(played.every((utterance) => utterance.lang === 'ro-RO')).toBe(true);
   });
 
   it('stops by itself after thirty seconds', async () => {

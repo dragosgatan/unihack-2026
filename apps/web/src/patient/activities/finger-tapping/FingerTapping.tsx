@@ -18,6 +18,41 @@ const practiceTaps = 6;
 const defaultConfig: FingerTappingConfig = { sides: ['right', 'left'], trialDurationMs: 15000 };
 
 type Target = FingerTappingTap['target'];
+
+const en = {
+  title: 'Finger tapping',
+  instructions:
+    'Put the device flat on a table. Use one finger of one hand. Tap the two circles one after the other, as fast as you can, until you hear stop.',
+  practise: 'Practise',
+  wellDone: 'Well done',
+  stop: 'Stop',
+  hand: (first: boolean, side: Side) =>
+    `${first ? 'Now the real one.' : 'Now the other hand.'} Use your ${side} hand. Tap as fast as you can until you hear stop.`,
+  start: 'Start',
+  practice: (side: Side) => `Practice. Use your ${side} hand. Tap the two circles one after the other.`,
+  trial: (side: Side) => `Use your ${side} hand. Tap as fast as you can.`,
+  first: 'First circle',
+  second: 'Second circle',
+};
+const hands = { right: 'dreaptă', left: 'stângă' } satisfies Record<Side, string>;
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    title: 'Atingeri cu degetul',
+    instructions:
+      'Puneți aparatul pe o masă. Folosiți un deget de la o mână. Atingeți cele două cercuri unul după altul, cât de repede puteți, până auziți stop.',
+    practise: 'Exersează',
+    wellDone: 'Foarte bine',
+    stop: 'Stop',
+    hand: (first, side) =>
+      `${first ? 'Acum testul propriu-zis.' : 'Acum cu cealaltă mână.'} Folosiți mâna ${hands[side]}. Atingeți cât de repede puteți până auziți stop.`,
+    start: 'Începe',
+    practice: (side) => `Exercițiu. Folosiți mâna ${hands[side]}. Atingeți cele două cercuri unul după altul.`,
+    trial: (side) => `Folosiți mâna ${hands[side]}. Atingeți cât de repede puteți.`,
+    first: 'Primul cerc',
+    second: 'Al doilea cerc',
+  },
+};
 type Phase = { kind: 'instructions' } | { kind: 'practice' } | { kind: 'hand'; index: number } | { kind: 'trial'; index: number };
 
 const parseConfig = (config: SessionPlanItem['config']): FingerTappingConfig => {
@@ -35,6 +70,7 @@ export function FingerTapping({
   const [{ sides, trialDurationMs }] = useState(() => parseConfig(config));
   const [phase, setPhase] = useState<Phase>({ kind: 'instructions' });
   const trials = useRef<FingerTappingTrial[]>([]);
+  const t = copy[language];
 
   const reportTask = (current?: FingerTappingTrial) =>
     onProgress({ stage: 'task', partialData: { trials: current ? [...trials.current, current] : trials.current } });
@@ -54,8 +90,8 @@ export function FingerTapping({
   if (phase.kind === 'instructions') {
     return (
       <Screen
-        title="Finger tapping"
-        text="Put the device flat on a table. Use one finger of one hand. Tap the two circles one after the other, as fast as you can, until you hear stop."
+        title={t.title}
+        text={t.instructions}
         language={language}
         action={
           <TapButton
@@ -64,7 +100,7 @@ export function FingerTapping({
               onProgress({ stage: 'practice' });
             }}
           >
-            Practise
+            {t.practise}
           </TapButton>
         }
       />
@@ -81,10 +117,10 @@ export function FingerTapping({
     const first = phase.index === 0;
     return (
       <Screen
-        title={first ? 'Well done' : 'Stop'}
-        text={`${first ? 'Now the real one.' : 'Now the other hand.'} Use your ${side} hand. Tap as fast as you can until you hear stop.`}
+        title={first ? t.wellDone : t.stop}
+        text={t.hand(first, side)}
         language={language}
-        action={<TapButton onTap={() => setPhase({ kind: 'trial', index: phase.index })}>Start</TapButton>}
+        action={<TapButton onTap={() => setPhase({ kind: 'trial', index: phase.index })}>{t.start}</TapButton>}
       />
     );
   }
@@ -106,7 +142,7 @@ function Practice({ side, language, onDone }: { side: Side; language: Language; 
 
   return (
     <TapArea
-      text={`Practice. Use your ${side} hand. Tap the two circles one after the other.`}
+      text={copy[language].practice(side)}
       language={language}
       onTap={() => {
         taps.current += 1;
@@ -142,7 +178,7 @@ function Trial({ side, durationMs, language, onTap, onEnd }: TrialProps) {
     onTap({ side, prosthesis: false, durationMs: t, taps: taps.current });
   };
 
-  return <TapArea text={`Use your ${side} hand. Tap as fast as you can.`} language={language} onTap={tap} />;
+  return <TapArea text={copy[language].trial(side)} language={language} onTap={tap} />;
 }
 
 type TapAreaProps = {
@@ -180,12 +216,12 @@ function TapArea({ text, language, onTap }: TapAreaProps) {
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 p-6 text-[20pt]">
+    <main lang={language} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 p-6 text-[20pt]">
       <div className="min-h-[60pt]" />
       <p className="flex flex-1 items-center justify-center text-center">{text}</p>
       <div className="flex justify-around pb-[10vh]">
-        {circle('a', 'First circle')}
-        {circle('b', 'Second circle')}
+        {circle('a', copy[language].first)}
+        {circle('b', copy[language].second)}
       </div>
     </main>
   );

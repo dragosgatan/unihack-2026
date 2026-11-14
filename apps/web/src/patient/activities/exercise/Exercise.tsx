@@ -19,17 +19,51 @@ import { Demo, type DemoName } from './Demo.tsx';
 
 export type Trial<R> = { side: Side; reps: R[] };
 
-export type ExerciseDefinition<S extends RepSample, R, Raw> = {
+type ExerciseCopy = {
   title: string;
-  demo: DemoName;
   instructions: string;
   practice: (side: Side) => string;
   task: (side: Side, target: number) => string;
+};
+
+export type ExerciseDefinition<S extends RepSample, R, Raw> = {
+  demo: DemoName;
+  copy: Record<Language, ExerciseCopy>;
   tracking: ExerciseTracking<S, R>;
   sides: (config: ExerciseConfig) => Side[];
   durationMs?: number;
-  cue?: (peak: number, config: ExerciseConfig) => string | undefined;
+  tooLow?: (peak: number, config: ExerciseConfig) => boolean;
   result: (trials: Trial<R>[]) => Raw;
+};
+
+const en = {
+  start: 'Start',
+  stepBack: 'Step back so I can see all of you.',
+  higher: 'A little higher.',
+  more: (left: number) => `${left} more.`,
+  cameraFailed: 'The camera did not start.',
+  stop: 'Stop.',
+  wellDone: 'Well done.',
+  loading: 'Getting ready. Stand back so your whole body is in view.',
+  next: (task: string) => `Well done. Rest. Next: ${task}`,
+  real: 'Well done. Now the real one.',
+  of: (count: number, target: number) => `${count} of ${target}`,
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    start: 'Începe',
+    stepBack: 'Mai faceți un pas înapoi, ca să vă văd tot corpul.',
+    higher: 'Puțin mai sus.',
+    more: (left) => `Încă ${left}.`,
+    cameraFailed: 'Camera nu a pornit.',
+    stop: 'Stop.',
+    wellDone: 'Foarte bine.',
+    loading: 'Ne pregătim. Depărtați-vă, ca să se vadă tot corpul.',
+    next: (task) => `Foarte bine. Odihniți-vă. Urmează: ${task}`,
+    real: 'Foarte bine. Acum exercițiul propriu-zis.',
+    of: (count, target) => `${count} din ${target}`,
+  },
 };
 
 type Step =
@@ -72,7 +106,9 @@ export function Exercise<S extends RepSample, R, Raw>({
   onComplete,
   onProgress,
 }: RunnerActivityProps<SessionPlanItem['config'], Raw> & { definition: ExerciseDefinition<S, R, Raw> }) {
-  const { title, demo, instructions, tracking, durationMs, cue, result } = definition;
+  const { demo, tracking, durationMs, tooLow, result } = definition;
+  const t = copy[language];
+  const { title, instructions, practice, task } = definition.copy[language];
   const [config] = useState(() => parseConfig(rawConfig));
   const [sides] = useState(() => definition.sides(config));
   const [cameraOn, setCameraOn] = useState(false);
@@ -139,7 +175,7 @@ export function Exercise<S extends RepSample, R, Raw>({
     if (!sample) {
       if (!state.warned && now - state.lastSeen > lostMs) {
         state.warned = true;
-        speak('Step back so I can see all of you.', language);
+        speak(t.stepBack, language);
       }
       return;
     }
@@ -165,8 +201,10 @@ export function Exercise<S extends RepSample, R, Raw>({
       return;
     }
     const left = target - repCount;
-    const correction = cue?.(peak(done.samples), config);
-    speak([correction, !durationMs && left <= 3 ? `${left} more.` : `${repCount}.`].filter(Boolean).join(' '), language);
+    const correction = tooLow?.(peak(done.samples), config) ? t.higher : '';
+    const counted = durationMs ? '' : left <= 3 ? t.more(left) : `${repCount}.`;
+    const said = [correction, counted].filter(Boolean).join(' ');
+    if (said) speak(said, language);
   };
 
   if (!cameraOn) {
@@ -179,7 +217,7 @@ export function Exercise<S extends RepSample, R, Raw>({
           <div className="flex flex-col items-center gap-6">
             <Demo name={demo} side={sides[0]} className="h-48" />
             <TapButton className="w-full" onTap={() => setCameraOn(true)}>
-              Start
+              {t.start}
             </TapButton>
           </div>
         }
@@ -189,23 +227,23 @@ export function Exercise<S extends RepSample, R, Raw>({
 
   const side = sides[step.kind === 'trial' || step.kind === 'next' ? step.index : 0] ?? 'right';
   const text = cameraFailed
-    ? 'The camera did not start.'
+    ? t.cameraFailed
     : step.kind === 'done'
-      ? `${durationMs ? 'Stop. ' : ''}Well done.`
+      ? `${durationMs ? `${t.stop} ` : ''}${t.wellDone}`
       : step.kind === 'loading'
-      ? 'Getting ready. Stand back so your whole body is in view.'
+      ? t.loading
       : step.kind === 'practice'
-        ? definition.practice(side)
+        ? practice(side)
         : step.kind === 'next'
-          ? `Well done. Rest. Next: ${definition.task(side, target)}`
-          : `${step.index === 0 ? 'Well done. Now the real one. ' : ''}${definition.task(side, target)}`;
+          ? t.next(task(side, target))
+          : `${step.index === 0 ? `${t.real} ` : ''}${task(side, target)}`;
 
   return (
     <CameraView
       text={text}
       language={language}
       demo={<Demo name={demo} side={side} className="h-40 shrink-0" />}
-      count={step.kind === 'trial' ? (durationMs ? `${count}` : `${count} of ${target}`) : undefined}
+      count={step.kind === 'trial' && !durationMs ? t.of(count, target) : undefined}
       onPose={onPose}
       onReady={() => go({ kind: 'practice' }, performance.now())}
       onError={(reason) => {
@@ -262,7 +300,7 @@ function CameraView({ text, language, demo, count, ...handlers }: CameraViewProp
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 p-6 text-[20pt]">
+    <main lang={language} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 p-6 text-[20pt]">
       <div className="min-h-[60pt]" />
       <p className="text-center">{text}</p>
       <div className="relative overflow-hidden rounded-2xl bg-black">

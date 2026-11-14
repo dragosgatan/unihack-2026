@@ -13,24 +13,45 @@ window.addEventListener('beforeinstallprompt', (event) => {
   deferred = event;
 });
 
+const en = {
+  title: 'Add Tempo to your home screen',
+  manual: 'Tap the Share button, then Add to Home Screen. Then you can open Tempo like any other app.',
+  done: 'Done',
+  text: 'Then you can open Tempo like any other app.',
+  add: 'Add to home screen',
+  notNow: 'Not now',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    title: 'Adăugați Tempo pe ecranul principal',
+    manual: 'Atingeți butonul Partajare, apoi Adaugă pe ecranul principal. Apoi puteți deschide Tempo ca pe orice altă aplicație.',
+    done: 'Gata',
+    text: 'Apoi puteți deschide Tempo ca pe orice altă aplicație.',
+    add: 'Adaugă pe ecranul principal',
+    notNow: 'Nu acum',
+  },
+};
+
 export function InstallPrompt({ language, onDone }: { language: Language; onDone: () => void }) {
   const install = deferred;
+  const t = copy[language];
 
   if (!install) {
     return (
       <Screen
-        title="Add Tempo to your home screen"
-        text="Tap the Share button, then Add to Home Screen. Then you can open Tempo like any other app."
+        title={t.title}
+        text={t.manual}
         language={language}
-        action={<TapButton onTap={onDone}>Done</TapButton>}
+        action={<TapButton onTap={onDone}>{t.done}</TapButton>}
       />
     );
   }
 
   return (
     <Screen
-      title="Add Tempo to your home screen"
-      text="Then you can open Tempo like any other app."
+      title={t.title}
+      text={t.text}
       language={language}
       action={
         <TapButton
@@ -39,12 +60,12 @@ export function InstallPrompt({ language, onDone }: { language: Language; onDone
             install.prompt().then(onDone, onDone);
           }}
         >
-          Add to home screen
+          {t.add}
         </TapButton>
       }
       secondary={
         <TapButton variant="secondary" onTap={onDone}>
-          Not now
+          {t.notNow}
         </TapButton>
       }
     />

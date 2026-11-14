@@ -114,13 +114,13 @@ describe('Exercise', () => {
     expect(progress.at(-1)?.stage).toBe('practice');
   });
 
-  it('runs sit to stand for 30 seconds and counts the stands', async () => {
+  it('runs sit to stand for 30 seconds and counts the stands without showing the count', async () => {
     const onComplete = vi.fn();
     await start(<SitToStand config={{}} language="en" onComplete={onComplete} onProgress={() => undefined} />);
     stand();
     stand();
     stand();
-    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.queryByText('2')).toBeNull();
     act(() => vi.advanceTimersByTime(30_000));
     expect(screen.getByText(/Stop/)).toBeTruthy();
     act(() => vi.advanceTimersByTime(2500));

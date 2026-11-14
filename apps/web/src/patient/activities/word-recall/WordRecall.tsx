@@ -19,7 +19,61 @@ type Phase = 'instructions' | 'practice' | 'practice-listen' | 'practice-recall'
 
 const wordGapMs = 1500;
 const recallDelayMs = 5 * 60_000;
-const listLanguage: Language = 'en';
+
+const en = {
+  title: 'Remember some words',
+  instructions:
+    'I will say five words. Listen carefully and try to remember them. Then say back as many as you can, in any order. Later I will ask you for them again.',
+  next: 'Next',
+  practiceTitle: 'Practice',
+  practice: 'First, a practice with two words. Tap Listen.',
+  listen: 'Listen',
+  practiceRecall: "Tap Speak and say the two words. Then tap I've finished.",
+  wellDone: 'Well done',
+  ready: 'Now five words. Listen carefully. Tap Listen when you are ready.',
+  recall: "Tap Speak and say all the words you remember, in any order. Then tap I've finished.",
+  rest: 'Time for a short rest',
+  restText: 'We will carry on in a moment.',
+  delayedTitle: 'The five words',
+  delayed: "Earlier I said five words. Tap Speak and say all of them you remember, in any order. Then tap I've finished.",
+  turn: 'Your turn',
+  micFailed: 'The microphone did not start',
+  micFailedText: 'Check that this page may use the microphone, then try again.',
+  tryAgain: 'Try again',
+  listening: 'Listening',
+  sayNow: "Say the words now. Tap I've finished when you are done.",
+  finished: "I've finished",
+  speak: 'Speak',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    title: 'Țineți minte câteva cuvinte',
+    instructions:
+      'Vă voi spune cinci cuvinte. Ascultați cu atenție și încercați să le țineți minte. Apoi spuneți-le pe cele pe care vi le amintiți, în orice ordine. Mai târziu vă voi cere să le spuneți din nou.',
+    next: 'Înainte',
+    practiceTitle: 'Exercițiu',
+    practice: 'Mai întâi, un exercițiu cu două cuvinte. Atingeți Ascultă.',
+    listen: 'Ascultă',
+    practiceRecall: 'Atingeți Vorbește și spuneți cele două cuvinte. Apoi atingeți Am terminat.',
+    wellDone: 'Foarte bine',
+    ready: 'Acum cinci cuvinte. Ascultați cu atenție. Atingeți Ascultă când sunteți gata.',
+    recall: 'Atingeți Vorbește și spuneți toate cuvintele pe care vi le amintiți, în orice ordine. Apoi atingeți Am terminat.',
+    rest: 'O scurtă pauză',
+    restText: 'Continuăm imediat.',
+    delayedTitle: 'Cele cinci cuvinte',
+    delayed:
+      'Mai devreme v-am spus cinci cuvinte. Atingeți Vorbește și spuneți-le pe toate cele pe care vi le amintiți, în orice ordine. Apoi atingeți Am terminat.',
+    turn: 'Rândul dumneavoastră',
+    micFailed: 'Microfonul nu a pornit',
+    micFailedText: 'Verificați că pagina are voie să folosească microfonul, apoi încercați din nou.',
+    tryAgain: 'Încearcă din nou',
+    listening: 'Vă ascult',
+    sayNow: 'Spuneți cuvintele acum. Atingeți Am terminat când ați terminat.',
+    finished: 'Am terminat',
+    speak: 'Vorbește',
+  },
+};
 
 export function WordRecall(props: Props) {
   const delayed = wordRecallDelayedConfigSchema.safeParse(props.config);
@@ -28,15 +82,17 @@ export function WordRecall(props: Props) {
 
 function ImmediateRecall({ language, onComplete, onProgress }: Props) {
   const [phase, setPhase] = useState<Phase>('instructions');
-  const [words] = useState(() => wordLists[Math.floor(Math.random() * wordLists.length)] ?? []);
+  const [listIndex] = useState(() => Math.floor(Math.random() * wordLists[language].length));
   const [presentedAt, setPresentedAt] = useState('');
-  const trial = { part: 'immediate' as const, language: listLanguage, words, presentedAt };
+  const words = wordLists[language][listIndex] ?? [];
+  const trial = { part: 'immediate' as const, language, words, presentedAt };
+  const t = copy[language];
 
   if (phase === 'instructions') {
     return (
       <Screen
-        title="Remember some words"
-        text="I will say five words. Listen carefully and try to remember them. Then say back as many as you can, in any order. Later I will ask you for them again."
+        title={t.title}
+        text={t.instructions}
         language={language}
         action={
           <TapButton
@@ -45,7 +101,7 @@ function ImmediateRecall({ language, onComplete, onProgress }: Props) {
               onProgress({ stage: 'practice' });
             }}
           >
-            Next
+            {t.next}
           </TapButton>
         }
       />
@@ -55,20 +111,20 @@ function ImmediateRecall({ language, onComplete, onProgress }: Props) {
   if (phase === 'practice') {
     return (
       <Screen
-        title="Practice"
-        text="First, a practice with two words. Tap Listen."
+        title={t.practiceTitle}
+        text={t.practice}
         language={language}
-        action={<TapButton onTap={() => setPhase('practice-listen')}>Listen</TapButton>}
+        action={<TapButton onTap={() => setPhase('practice-listen')}>{t.listen}</TapButton>}
       />
     );
   }
 
-  if (phase === 'practice-listen') return <Playback words={practiceWords} language={listLanguage} onDone={() => setPhase('practice-recall')} />;
+  if (phase === 'practice-listen') return <Playback words={practiceWords[language]} language={language} onDone={() => setPhase('practice-recall')} />;
 
   if (phase === 'practice-recall') {
     return (
       <Recall
-        text="Tap Speak and say the two words. Then tap I've finished."
+        text={t.practiceRecall}
         language={language}
         keep={false}
         onRecorded={() => setPhase('ready')}
@@ -79,8 +135,8 @@ function ImmediateRecall({ language, onComplete, onProgress }: Props) {
   if (phase === 'ready') {
     return (
       <Screen
-        title="Well done"
-        text="Now five words. Listen carefully. Tap Listen when you are ready."
+        title={t.wellDone}
+        text={t.ready}
         language={language}
         action={
           <TapButton
@@ -91,18 +147,18 @@ function ImmediateRecall({ language, onComplete, onProgress }: Props) {
               onProgress({ stage: 'task', partialData: { ...trial, presentedAt: at } });
             }}
           >
-            Listen
+            {t.listen}
           </TapButton>
         }
       />
     );
   }
 
-  if (phase === 'listen') return <Playback words={words} language={listLanguage} onDone={() => setPhase('recall')} />;
+  if (phase === 'listen') return <Playback words={words} language={language} onDone={() => setPhase('recall')} />;
 
   return (
     <Recall
-      text="Tap Speak and say all the words you remember, in any order. Then tap I've finished."
+      text={t.recall}
       language={language}
       keep
       onStarted={(recording) => onProgress({ stage: 'task', partialData: { ...trial, recording } })}
@@ -122,14 +178,14 @@ function DelayedRecall({ config, language, onComplete, onProgress }: Omit<Props,
   }, [resting, waitMs]);
 
   if (resting) {
-    return <Screen title="Time for a short rest" text="We will carry on in a moment." language={language} action={null} />;
+    return <Screen title={copy[language].rest} text={copy[language].restText} language={language} action={null} />;
   }
 
   const trial = { ...config, part: 'delayed' as const };
   return (
     <Recall
-      title="The five words"
-      text="Earlier I said five words. Tap Speak and say all of them you remember, in any order. Then tap I've finished."
+      title={copy[language].delayedTitle}
+      text={copy[language].delayed}
       language={language}
       keep
       onStarted={(recording) => onProgress({ stage: 'task', partialData: { ...trial, recording } })}
@@ -147,7 +203,7 @@ function Playback({ words, language, onDone }: { words: string[]; language: Lang
     return () => timers.forEach(clearTimeout);
   }, [words, language]);
 
-  return <Screen title="Listen" text="" spoken="" language={language} action={null} />;
+  return <Screen title={copy[language].listen} text="" spoken="" language={language} action={null} />;
 }
 
 type RecallProps = {
@@ -159,7 +215,8 @@ type RecallProps = {
   onRecorded: (recording: WordRecallRecording) => void;
 };
 
-function Recall({ title = 'Your turn', text, language, keep, onStarted, onRecorded }: RecallProps) {
+function Recall({ title, text, language, keep, onStarted, onRecorded }: RecallProps) {
+  const t = copy[language];
   const [state, setState] = useState<'idle' | 'starting' | 'listening' | 'failed'>('idle');
   const recorder = useRecorder();
 
@@ -181,10 +238,10 @@ function Recall({ title = 'Your turn', text, language, keep, onStarted, onRecord
   if (state === 'failed') {
     return (
       <Screen
-        title="The microphone did not start"
-        text="Check that this page may use the microphone, then try again."
+        title={t.micFailed}
+        text={t.micFailedText}
         language={language}
-        action={<TapButton onTap={speakNow}>Try again</TapButton>}
+        action={<TapButton onTap={speakNow}>{t.tryAgain}</TapButton>}
       />
     );
   }
@@ -192,18 +249,18 @@ function Recall({ title = 'Your turn', text, language, keep, onStarted, onRecord
   if (state !== 'idle') {
     return (
       <Screen
-        title="Listening"
-        text="Say the words now. Tap I've finished when you are done."
+        title={t.listening}
+        text={t.sayNow}
         spoken=""
         language={language}
         action={
           <TapButton disabled={state === 'starting'} onTap={recorder.stop}>
-            I've finished
+            {t.finished}
           </TapButton>
         }
       />
     );
   }
 
-  return <Screen title={title} text={text} language={language} action={<TapButton onTap={speakNow}>Speak</TapButton>} />;
+  return <Screen title={title ?? t.turn} text={text} language={language} action={<TapButton onTap={speakNow}>{t.speak}</TapButton>} />;
 }

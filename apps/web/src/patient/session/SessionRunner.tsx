@@ -3,6 +3,7 @@ import { Navigate } from 'react-router';
 import type { Language, SubmittedResult } from '@tempo/shared';
 import { activityModules } from '../activities/index.ts';
 import { Placeholder } from '../activities/placeholder/Placeholder.tsx';
+import { LanguageSwitch } from '../LanguageSwitch.tsx';
 import { Screen } from '../Screen.tsx';
 import { TapButton } from '../TapButton.tsx';
 import { CannotDo } from './CannotDo.tsx';
@@ -23,6 +24,50 @@ import {
 import { finishRunner, loadRunner, redeemSessionCode, saveRunner, syncOutbox } from './store.ts';
 
 const sync = () => void syncOutbox().catch(console.error);
+
+const en = {
+  codeTitle: 'Enter your session code',
+  everything: "That's everything for today",
+  thankName: (name: string) => `Thank you, ${name}.`,
+  done: 'Done',
+  hello: (name: string) => `Hello, ${name}`,
+  ready: 'Tap Start when you are ready.',
+  start: 'Start',
+  thanks: 'Thank you',
+  next: 'Tap Continue when you are ready for the next one.',
+  continue: 'Continue',
+  takeBreak: 'Take a break',
+  break: 'Taking a break',
+  carryOnText: 'Tap Carry on when you are ready.',
+  carryOn: 'Carry on',
+  finish: 'Finish for today',
+  fine: "That's fine",
+  tell: "We'll let your therapist know.",
+  cannotDo: "I can't do this",
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    codeTitle: 'Introduceți codul sesiunii',
+    everything: 'Asta a fost tot pentru azi',
+    thankName: (name) => `Vă mulțumim, ${name}.`,
+    done: 'Gata',
+    hello: (name) => `Bună ziua, ${name}`,
+    ready: 'Atingeți Începe când sunteți gata.',
+    start: 'Începe',
+    thanks: 'Vă mulțumim',
+    next: 'Atingeți Continuă când sunteți gata pentru următorul.',
+    continue: 'Continuă',
+    takeBreak: 'Ia o pauză',
+    break: 'Pauză',
+    carryOnText: 'Atingeți Mergem mai departe când sunteți gata.',
+    carryOn: 'Mergem mai departe',
+    finish: 'Termină pentru azi',
+    fine: 'Nicio problemă',
+    tell: 'Îi vom spune terapeutului.',
+    cannotDo: 'Nu pot face asta',
+  },
+};
 
 type SessionRunnerProps = {
   exitTo?: string;
@@ -52,22 +97,30 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   if (!loaded) return null;
 
   if (finished) {
+    const t = copy[finished.language];
     return (
       <Screen
-        title="That's everything for today"
-        text={`Thank you, ${finished.name}.`}
+        title={t.everything}
+        text={t.thankName(finished.name)}
         language={finished.language}
-        action={<TapButton onTap={() => setFinished(undefined)}>Done</TapButton>}
+        action={<TapButton onTap={() => setFinished(undefined)}>{t.done}</TapButton>}
       />
     );
   }
 
   if (!state) {
     if (exitTo) return <Navigate to={exitTo} replace />;
-    return <CodeEntry title="Enter your session code" redeem={redeemSessionCode} onRedeemed={(redeemed) => setState(startRunner(redeemed))} />;
+    return (
+      <CodeEntry
+        title={{ en: en.codeTitle, ro: copy.ro.codeTitle }}
+        redeem={redeemSessionCode}
+        onRedeemed={(redeemed, chosen) => setState(startRunner(chosen ? { ...redeemed, plan: { ...redeemed.plan, language: chosen } } : redeemed))}
+      />
+    );
   }
 
   const language = state.plan.language;
+  const t = copy[language];
   const go = (stage: Stage) => setState({ ...state, stage });
 
   const finish = (final: RunnerState) => {
@@ -82,10 +135,11 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   if (state.stage === 'welcome') {
     return (
       <Screen
-        title={`Hello, ${state.patientFirstName}`}
-        text="Tap Start when you are ready."
+        title={t.hello(state.patientFirstName)}
+        text={t.ready}
         language={language}
-        action={<TapButton onTap={() => go('activity')}>Start</TapButton>}
+        action={<TapButton onTap={() => go('activity')}>{t.start}</TapButton>}
+        secondary={<LanguageSwitch language={language} onChange={(next) => setState({ ...state, plan: { ...state.plan, language: next } })} />}
       />
     );
   }
@@ -93,13 +147,13 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   if (state.stage === 'between') {
     return (
       <Screen
-        title="Thank you"
-        text="Tap Continue when you are ready for the next one."
+        title={t.thanks}
+        text={t.next}
         language={language}
-        action={<TapButton onTap={() => go('activity')}>Continue</TapButton>}
+        action={<TapButton onTap={() => go('activity')}>{t.continue}</TapButton>}
         secondary={
           <TapButton variant="secondary" onTap={() => go('paused')}>
-            Take a break
+            {t.takeBreak}
           </TapButton>
         }
       />
@@ -109,13 +163,13 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   if (state.stage === 'paused') {
     return (
       <Screen
-        title="Taking a break"
-        text="Tap Carry on when you are ready."
+        title={t.break}
+        text={t.carryOnText}
         language={language}
-        action={<TapButton onTap={() => go('activity')}>Carry on</TapButton>}
+        action={<TapButton onTap={() => go('activity')}>{t.carryOn}</TapButton>}
         secondary={
           <TapButton variant="secondary" onTap={() => finish(state)}>
-            Finish for today
+            {t.finish}
           </TapButton>
         }
       />
@@ -130,14 +184,14 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
     const done = isFinished(state);
     return (
       <Screen
-        title="That's fine"
-        text="We'll let your therapist know."
+        title={t.fine}
+        text={t.tell}
         language={language}
-        action={<TapButton onTap={() => (done ? finish(state) : go('activity'))}>Continue</TapButton>}
+        action={<TapButton onTap={() => (done ? finish(state) : go('activity'))}>{t.continue}</TapButton>}
         secondary={
           !done && (
             <TapButton variant="secondary" onTap={() => go('paused')}>
-              Take a break
+              {t.takeBreak}
             </TapButton>
           )
         }
@@ -187,7 +241,7 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
       {item.kind !== 'check-in' && (
         <div className="pointer-events-none fixed inset-x-0 top-0 mx-auto flex max-w-2xl p-6">
           <TapButton variant="secondary" className="pointer-events-auto" onTap={onCannotDo}>
-            I can't do this
+            <span lang={language}>{t.cannotDo}</span>
           </TapButton>
         </div>
       )}

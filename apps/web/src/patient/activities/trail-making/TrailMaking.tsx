@@ -24,24 +24,58 @@ const alternating = (pairs: number) =>
   Array.from({ length: pairs }, (_, index) => [String(index + 1), String.fromCharCode(65 + index)]).flat();
 
 const parts = {
-  a: {
-    title: 'Connect the numbers',
-    order: '1, then 2, then 3, and so on, up to the last number',
-    prompt: 'Tap 1, 2, 3 and so on, in order.',
-    practice: numbers(4),
-    task: numbers(12),
+  a: { practice: numbers(4), task: numbers(12) },
+  b: { practice: alternating(2), task: alternating(6) },
+} satisfies Record<Part, { practice: string[]; task: string[] }>;
+
+const en = {
+  parts: {
+    a: {
+      title: 'Connect the numbers',
+      order: '1, then 2, then 3, and so on, up to the last number',
+      prompt: 'Tap 1, 2, 3 and so on, in order.',
+    },
+    b: {
+      title: 'Numbers and letters',
+      order: 'switching between numbers and letters: 1, then A, then 2, then B, and so on',
+      prompt: 'Tap 1, A, 2, B and so on, in order.',
+    },
+  } satisfies Record<Part, { title: string; order: string; prompt: string }>,
+  instructions: (order: string) => `You will see circles. Tap them in order, ${order}. Use one hand. Go as quickly and carefully as you can.`,
+  next: 'Next',
+  practice: (labels: string[]) => `Practice. Tap ${labels.join(', ')}, in order.`,
+  wellDone: 'Well done',
+  ready: 'Now the real one, with more circles. Go as quickly and carefully as you can.',
+  start: 'Start',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    parts: {
+      a: {
+        title: 'Uniți numerele',
+        order: '1, apoi 2, apoi 3 și așa mai departe, până la ultimul număr',
+        prompt: 'Atingeți 1, 2, 3 și așa mai departe, în ordine.',
+      },
+      b: {
+        title: 'Numere și litere',
+        order: 'alternând numerele cu literele: 1, apoi A, apoi 2, apoi B și așa mai departe',
+        prompt: 'Atingeți 1, A, 2, B și așa mai departe, în ordine.',
+      },
+    },
+    instructions: (order) => `Veți vedea niște cercuri. Atingeți-le în ordine: ${order}. Folosiți o singură mână. Lucrați cât de repede și de atent puteți.`,
+    next: 'Înainte',
+    practice: (labels) => `Exercițiu. Atingeți ${labels.join(', ')}, în ordine.`,
+    wellDone: 'Foarte bine',
+    ready: 'Acum testul propriu-zis, cu mai multe cercuri. Lucrați cât de repede și de atent puteți.',
+    start: 'Începe',
   },
-  b: {
-    title: 'Numbers and letters',
-    order: 'switching between numbers and letters: 1, then A, then 2, then B, and so on',
-    prompt: 'Tap 1, A, 2, B and so on, in order.',
-    practice: alternating(2),
-    task: alternating(6),
-  },
-} satisfies Record<Part, { title: string; order: string; prompt: string; practice: string[]; task: string[] }>;
+};
 
 function TrailMaking({ part, language, onComplete, onProgress }: Props & { part: Part }) {
-  const { title, order, prompt, practice, task } = parts[part];
+  const { practice, task } = parts[part];
+  const t = copy[language];
+  const { title, order, prompt } = t.parts[part];
   const [phase, setPhase] = useState<Phase>('instructions');
   const [hand, setHand] = useState<Side>('right');
   const [layout] = useState(() => ({ practice: trailLayout(practice), task: trailLayout(task) }));
@@ -53,9 +87,9 @@ function TrailMaking({ part, language, onComplete, onProgress }: Props & { part:
     return (
       <Screen
         title={title}
-        text={`You will see circles. Tap them in order, ${order}. Use one hand. Go as quickly and carefully as you can.`}
+        text={t.instructions(order)}
         language={language}
-        action={<TapButton onTap={() => setPhase('hand')}>Next</TapButton>}
+        action={<TapButton onTap={() => setPhase('hand')}>{t.next}</TapButton>}
       />
     );
   }
@@ -78,7 +112,7 @@ function TrailMaking({ part, language, onComplete, onProgress }: Props & { part:
       <Trail
         key="practice"
         targets={layout.practice}
-        text={`Practice. Tap ${practice.join(', ')}, in order.`}
+        text={t.practice(practice)}
         language={language}
         onFinish={() => setPhase('ready')}
       />
@@ -88,8 +122,8 @@ function TrailMaking({ part, language, onComplete, onProgress }: Props & { part:
   if (phase === 'ready') {
     return (
       <Screen
-        title="Well done"
-        text="Now the real one, with more circles. Go as quickly and carefully as you can."
+        title={t.wellDone}
+        text={t.ready}
         language={language}
         action={
           <TapButton
@@ -98,7 +132,7 @@ function TrailMaking({ part, language, onComplete, onProgress }: Props & { part:
               reportTask([]);
             }}
           >
-            Start
+            {t.start}
           </TapButton>
         }
       />
@@ -154,7 +188,7 @@ function Trail({ targets, text, language, onTap, onFinish }: TrailProps) {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 p-6 text-[20pt]">
+    <main lang={language} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 p-6 text-[20pt]">
       <div className="min-h-[60pt]" />
       <p className="text-center">{text}</p>
       <div className="relative min-h-[24rem] flex-1 touch-none select-none">

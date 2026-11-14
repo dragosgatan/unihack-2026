@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ClockDrawingPoint, ClockDrawingRawResult, SessionPlanItem, Side } from '@tempo/shared';
+import type { ClockDrawingPoint, ClockDrawingRawResult, Language, SessionPlanItem, Side } from '@tempo/shared';
 import { DrawingArea } from '../../DrawingArea.tsx';
 import { HandChoice } from '../../HandChoice.tsx';
 import { Screen } from '../../Screen.tsx';
@@ -9,27 +9,55 @@ import type { RunnerActivityProps } from '../index.ts';
 type Props = RunnerActivityProps<SessionPlanItem['config'], ClockDrawingRawResult>;
 type Phase = 'instructions' | 'hand' | 'practice' | 'ready' | 'task';
 
-const targetTimes = [
-  { time: '11:10', words: 'ten past eleven' },
-  { time: '8:20', words: 'twenty past eight' },
-  { time: '2:50', words: 'ten to three' },
-  { time: '10:25', words: 'twenty-five past ten' },
-] as const;
+const targetTimes = ['11:10', '8:20', '2:50', '10:25'] as const;
+type TargetTime = (typeof targetTimes)[number];
+
+const en = {
+  times: { '11:10': 'ten past eleven', '8:20': 'twenty past eight', '2:50': 'ten to three', '10:25': 'twenty-five past ten' } satisfies Record<
+    TargetTime,
+    string
+  >,
+  title: 'Draw a clock',
+  instructions: 'You will draw a clock with your finger, with all the numbers and two hands showing a time. Use one hand. There is no rush.',
+  next: 'Next',
+  practice: 'Practice. Draw a circle with your finger, then tap Done.',
+  wellDone: 'Well done',
+  ready: (words: string) => `Now draw a clock. Put in all the numbers, and set the hands to ${words}. Tap Done when you have finished.`,
+  start: 'Start',
+  task: (words: string) => `Draw a clock with all the numbers. Set the hands to ${words}.`,
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    times: { '11:10': 'unsprezece și zece', '8:20': 'opt și douăzeci', '2:50': 'trei fără zece', '10:25': 'zece și douăzeci și cinci' },
+    title: 'Desenați un ceas',
+    instructions:
+      'Veți desena cu degetul un ceas, cu toate numerele și cu două limbi care arată o oră. Folosiți o singură mână. Nu vă grăbiți.',
+    next: 'Înainte',
+    practice: 'Exercițiu. Desenați un cerc cu degetul, apoi atingeți Gata.',
+    wellDone: 'Foarte bine',
+    ready: (words) => `Acum desenați un ceas. Puneți toate numerele și potriviți limbile la ora ${words}. Atingeți Gata când ați terminat.`,
+    start: 'Începe',
+    task: (words) => `Desenați un ceas cu toate numerele. Potriviți limbile la ora ${words}.`,
+  },
+};
 
 export function ClockDrawing({ language, onComplete, onProgress }: Props) {
   const [phase, setPhase] = useState<Phase>('instructions');
   const [hand, setHand] = useState<Side>('right');
-  const [{ time, words }] = useState(() => targetTimes[Math.floor(Math.random() * targetTimes.length)] ?? targetTimes[0]);
+  const [time] = useState(() => targetTimes[Math.floor(Math.random() * targetTimes.length)] ?? targetTimes[0]);
+  const t = copy[language];
+  const words = t.times[time];
 
   const drawing = (strokes: ClockDrawingPoint[][]): ClockDrawingRawResult => ({ hand, targetTime: time, strokes });
 
   if (phase === 'instructions') {
     return (
       <Screen
-        title="Draw a clock"
-        text="You will draw a clock with your finger, with all the numbers and two hands showing a time. Use one hand. There is no rush."
+        title={t.title}
+        text={t.instructions}
         language={language}
-        action={<TapButton onTap={() => setPhase('hand')}>Next</TapButton>}
+        action={<TapButton onTap={() => setPhase('hand')}>{t.next}</TapButton>}
       />
     );
   }
@@ -51,7 +79,7 @@ export function ClockDrawing({ language, onComplete, onProgress }: Props) {
     return (
       <DrawingArea
         key="practice"
-        text="Practice. Draw a circle with your finger, then tap Done."
+        text={t.practice}
         language={language}
         onDone={() => setPhase('ready')}
       />
@@ -61,8 +89,8 @@ export function ClockDrawing({ language, onComplete, onProgress }: Props) {
   if (phase === 'ready') {
     return (
       <Screen
-        title="Well done"
-        text={`Now draw a clock. Put in all the numbers, and set the hands to ${words}. Tap Done when you have finished.`}
+        title={t.wellDone}
+        text={t.ready(words)}
         language={language}
         action={
           <TapButton
@@ -71,7 +99,7 @@ export function ClockDrawing({ language, onComplete, onProgress }: Props) {
               onProgress({ stage: 'task', partialData: drawing([]) });
             }}
           >
-            Start
+            {t.start}
           </TapButton>
         }
       />
@@ -81,7 +109,7 @@ export function ClockDrawing({ language, onComplete, onProgress }: Props) {
   return (
     <DrawingArea
       key="task"
-      text={`Draw a clock with all the numbers. Set the hands to ${words}.`}
+      text={t.task(words)}
       language={language}
       onChange={(strokes) => onProgress({ stage: 'task', partialData: drawing(strokes) })}
       onDone={(strokes) => onComplete(drawing(strokes))}

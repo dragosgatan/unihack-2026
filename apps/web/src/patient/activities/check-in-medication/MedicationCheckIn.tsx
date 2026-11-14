@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   medicationCheckInConfigSchema,
   type ActivityModuleProps,
+  type Language,
   type MedicationCheckIn as MedicationAnswer,
   type MedicationStatus,
   type SessionPlanItem,
@@ -12,11 +13,31 @@ import { SpokenNote } from '../../SpokenNote.tsx';
 
 type Answer = MedicationAnswer['medications'][number];
 
-const statuses: [MedicationStatus, string][] = [
-  ['taken', 'Yes, as planned'],
-  ['missed', 'I missed some'],
-  ['stopped', 'I stopped taking it'],
-];
+const en = {
+  taken: (name: string) => `Did you take your ${name} as planned?`,
+  sideEffects: (name: string) => `Have you noticed any side effects from ${name}?`,
+  statuses: [
+    ['taken', 'Yes, as planned'],
+    ['missed', 'I missed some'],
+    ['stopped', 'I stopped taking it'],
+  ] as [MedicationStatus, string][],
+  no: 'No',
+  yes: 'Yes',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    taken: (name) => `Ați luat ${name} cum era planificat?`,
+    sideEffects: (name) => `Ați observat efecte adverse de la ${name}?`,
+    statuses: [
+      ['taken', 'Da, cum era planificat'],
+      ['missed', 'Am uitat unele doze'],
+      ['stopped', 'Am încetat să-l iau'],
+    ],
+    no: 'Nu',
+    yes: 'Da',
+  },
+};
 
 const noticedWithoutNote = 'Noticed side effects';
 
@@ -36,6 +57,7 @@ export function MedicationCheckIn({
   const [status, setStatus] = useState<MedicationStatus>();
   const [describing, setDescribing] = useState(false);
   const answers = useRef<Answer[]>([]);
+  const t = copy[language];
 
   useEffect(() => {
     if (medications.length === 0) onComplete({ item: 'medication', medications: [] });
@@ -56,9 +78,9 @@ export function MedicationCheckIn({
   if (!status) {
     return (
       <Choices
-        title={`Did you take your ${medication.name} as planned?`}
+        title={t.taken(medication.name)}
         language={language}
-        options={statuses}
+        options={t.statuses}
         onPick={setStatus}
       />
     );
@@ -68,11 +90,11 @@ export function MedicationCheckIn({
 
   return (
     <Choices
-      title={`Have you noticed any side effects from ${medication.name}?`}
+      title={t.sideEffects(medication.name)}
       language={language}
       options={[
-        [false, 'No'],
-        [true, 'Yes'],
+        [false, t.no],
+        [true, t.yes],
       ]}
       onPick={(noticed) => {
         if (!noticed) answer();

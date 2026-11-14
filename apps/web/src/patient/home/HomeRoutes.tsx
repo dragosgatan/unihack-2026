@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import type { Language } from '@tempo/shared';
 import { Route, Routes, useSearchParams } from 'react-router';
 import { DigitEntry } from '../DigitEntry.tsx';
 import { Screen } from '../Screen.tsx';
@@ -13,19 +14,56 @@ import { LogEpisode } from './LogEpisode.tsx';
 
 const pinLength = 4;
 
+const en = {
+  pairTitle: 'Enter your pairing code',
+  choose: 'Choose a 4-digit PIN',
+  mismatch: 'Those did not match. Please choose a PIN again.',
+  hello: (name: string) => `Hello, ${name}`,
+  use: (name: string) => `Hello, ${name}. You will use this PIN to open Tempo.`,
+  again: 'Enter the PIN again',
+  sure: 'So we know it is right.',
+  forgotTitle: 'Forgot your PIN?',
+  forgotText: 'Ask your therapist for a new pairing code, then pair this phone again. Your results are kept.',
+  pairAgain: 'Pair again',
+  back: 'Back',
+  wrong: 'That PIN did not match. Please try again.',
+  enter: 'Enter your PIN.',
+  forgot: 'I forgot my PIN',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    pairTitle: 'Introduceți codul de asociere',
+    choose: 'Alegeți un PIN din 4 cifre',
+    mismatch: 'Nu s-au potrivit. Vă rugăm să alegeți din nou un PIN.',
+    hello: (name) => `Bună ziua, ${name}`,
+    use: (name) => `Bună ziua, ${name}. Veți folosi acest PIN ca să deschideți Tempo.`,
+    again: 'Introduceți PIN-ul din nou',
+    sure: 'Ca să știm că este corect.',
+    forgotTitle: 'Ați uitat PIN-ul?',
+    forgotText: 'Cereți terapeutului un cod nou de asociere, apoi asociați din nou telefonul. Rezultatele rămân păstrate.',
+    pairAgain: 'Asociază din nou',
+    back: 'Înapoi',
+    wrong: 'PIN-ul nu s-a potrivit. Vă rugăm să încercați din nou.',
+    enter: 'Introduceți PIN-ul.',
+    forgot: 'Am uitat PIN-ul',
+  },
+};
+
 const isInstalled = () =>
   window.matchMedia?.('(display-mode: standalone)').matches || ('standalone' in navigator && navigator.standalone === true);
 
 function ChoosePin({ device, onChosen }: { device: HomeDevice; onChosen: (pin: string) => void }) {
   const [first, setFirst] = useState<string>();
   const [mismatch, setMismatch] = useState(false);
+  const t = copy[device.language];
 
   if (first === undefined) {
     return (
       <DigitEntry
         key="first"
-        title="Choose a 4-digit PIN"
-        message={mismatch ? 'Those did not match. Please choose a PIN again.' : `Hello, ${device.patientFirstName}. You will use this PIN to open Tempo.`}
+        title={t.choose}
+        message={mismatch ? t.mismatch : t.use(device.patientFirstName)}
         language={device.language}
         length={pinLength}
         masked
@@ -37,8 +75,8 @@ function ChoosePin({ device, onChosen }: { device: HomeDevice; onChosen: (pin: s
   return (
     <DigitEntry
       key="again"
-      title="Enter the PIN again"
-      message="So we know it is right."
+      title={t.again}
+      message={t.sure}
       language={device.language}
       length={pinLength}
       masked
@@ -54,17 +92,18 @@ function ChoosePin({ device, onChosen }: { device: HomeDevice; onChosen: (pin: s
 function Unlock({ device, onUnlocked, onForgot }: { device: HomeDevice; onUnlocked: () => void; onForgot: () => void }) {
   const [attempt, setAttempt] = useState(0);
   const [forgot, setForgot] = useState(false);
+  const t = copy[device.language];
 
   if (forgot) {
     return (
       <Screen
-        title="Forgot your PIN?"
-        text="Ask your therapist for a new pairing code, then pair this phone again. Your results are kept."
+        title={t.forgotTitle}
+        text={t.forgotText}
         language={device.language}
-        action={<TapButton onTap={onForgot}>Pair again</TapButton>}
+        action={<TapButton onTap={onForgot}>{t.pairAgain}</TapButton>}
         secondary={
           <TapButton variant="secondary" onTap={() => setForgot(false)}>
-            Back
+            {t.back}
           </TapButton>
         }
       />
@@ -75,8 +114,8 @@ function Unlock({ device, onUnlocked, onForgot }: { device: HomeDevice; onUnlock
   return (
     <DigitEntry
       key={attempt}
-      title={`Hello, ${device.patientFirstName}`}
-      message={attempt ? 'That PIN did not match. Please try again.' : 'Enter your PIN.'}
+      title={t.hello(device.patientFirstName)}
+      message={attempt ? t.wrong : t.enter}
       language={device.language}
       length={pinLength}
       masked
@@ -85,7 +124,7 @@ function Unlock({ device, onUnlocked, onForgot }: { device: HomeDevice; onUnlock
       }}
       secondary={
         <TapButton variant="secondary" onTap={() => setForgot(true)}>
-          I forgot my PIN
+          {t.forgot}
         </TapButton>
       }
     />
@@ -110,7 +149,14 @@ export function HomeRoutes() {
   }, []);
 
   if (!device) {
-    return <CodeEntry title="Enter your pairing code" initialCode={params.get('code') ?? undefined} redeem={pairDevice} onRedeemed={keep} />;
+    return (
+      <CodeEntry
+        title={{ en: en.pairTitle, ro: copy.ro.pairTitle }}
+        initialCode={params.get('code') ?? undefined}
+        redeem={pairDevice}
+        onRedeemed={(paired, chosen) => keep(chosen ? { ...paired, language: chosen } : paired)}
+      />
+    );
   }
 
   if (!device.pinHash) {
@@ -134,7 +180,7 @@ export function HomeRoutes() {
 
   return (
     <Routes>
-      <Route index element={<DueToday device={device} onUnpaired={unpair} />} />
+      <Route index element={<DueToday device={device} onChange={keep} onUnpaired={unpair} />} />
       <Route
         path="session"
         element={<SessionRunner exitTo={homePath} onFinish={(results, at) => saveHomeData(recordFinished(loadHomeData(), results, at))} />}

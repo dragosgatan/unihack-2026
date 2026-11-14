@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { Language } from '@tempo/shared';
 
 export const voices: Record<Language, string> = { en: 'en-GB', ro: 'ro-RO' };
+export const browserLanguage = (): Language => (navigator.language.toLowerCase().startsWith('ro') ? 'ro' : 'en');
 const hasSpeech = () => typeof speechSynthesis !== 'undefined';
 
 let audio: AudioContext | undefined;

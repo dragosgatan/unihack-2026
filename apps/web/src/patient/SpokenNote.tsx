@@ -5,6 +5,36 @@ import { Recognition, type Recognizer } from './recognition.ts';
 import { Screen } from './Screen.tsx';
 import { TapButton } from './TapButton.tsx';
 
+const en = {
+  listening: 'Listening',
+  ownWords: 'Say it in your own words.',
+  finished: "I've finished",
+  thanks: 'Thank you',
+  thanksSpoken: 'Thank you. Tap Send, or Say it again.',
+  send: 'Send',
+  again: 'Say it again',
+  more: 'Do you want to say more?',
+  moreText: 'Tap Speak and tell us in your own words.',
+  speak: 'Speak',
+  noThanks: 'No thanks',
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    listening: 'Vă ascult',
+    ownWords: 'Spuneți cu cuvintele dumneavoastră.',
+    finished: 'Am terminat',
+    thanks: 'Vă mulțumim',
+    thanksSpoken: 'Vă mulțumim. Atingeți Trimite sau Spune din nou.',
+    send: 'Trimite',
+    again: 'Spune din nou',
+    more: 'Vreți să spuneți mai mult?',
+    moreText: 'Atingeți Vorbește și spuneți-ne cu cuvintele dumneavoastră.',
+    speak: 'Vorbește',
+    noThanks: 'Nu, mulțumesc',
+  },
+};
+
 type SpokenNoteProps = {
   language: Language;
   onDone: (note: string | undefined) => void;
@@ -14,6 +44,7 @@ export function SpokenNote({ language, onDone }: SpokenNoteProps) {
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState('');
   const recognizer = useRef<Recognizer>(undefined);
+  const t = copy[language];
 
   useEffect(() => () => recognizer.current?.abort(), []);
 
@@ -44,11 +75,11 @@ export function SpokenNote({ language, onDone }: SpokenNoteProps) {
   if (listening) {
     return (
       <Screen
-        title="Listening"
-        text={heard || 'Say it in your own words.'}
+        title={t.listening}
+        text={heard || t.ownWords}
         spoken=""
         language={language}
-        action={<TapButton onTap={() => recognizer.current?.stop()}>I've finished</TapButton>}
+        action={<TapButton onTap={() => recognizer.current?.stop()}>{t.finished}</TapButton>}
       />
     );
   }
@@ -56,14 +87,14 @@ export function SpokenNote({ language, onDone }: SpokenNoteProps) {
   if (heard) {
     return (
       <Screen
-        title="Thank you"
+        title={t.thanks}
         text={heard}
-        spoken="Thank you. Tap Send, or Say it again."
+        spoken={t.thanksSpoken}
         language={language}
-        action={<TapButton onTap={() => onDone(heard)}>Send</TapButton>}
+        action={<TapButton onTap={() => onDone(heard)}>{t.send}</TapButton>}
         secondary={
           <TapButton variant="secondary" onTap={listen}>
-            Say it again
+            {t.again}
           </TapButton>
         }
       />
@@ -72,13 +103,13 @@ export function SpokenNote({ language, onDone }: SpokenNoteProps) {
 
   return (
     <Screen
-      title="Do you want to say more?"
-      text="Tap Speak and tell us in your own words."
+      title={t.more}
+      text={t.moreText}
       language={language}
-      action={<TapButton onTap={listen}>Speak</TapButton>}
+      action={<TapButton onTap={listen}>{t.speak}</TapButton>}
       secondary={
         <TapButton variant="secondary" onTap={() => onDone(undefined)}>
-          No thanks
+          {t.noThanks}
         </TapButton>
       }
     />

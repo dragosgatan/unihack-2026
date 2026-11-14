@@ -7,17 +7,37 @@ import { SpokenNote } from '../SpokenNote.tsx';
 import { TapButton } from '../TapButton.tsx';
 import type { SkipAnswer } from './runner.ts';
 
-const reasons: [SkipReason, string][] = [
-  ['pain', 'It hurts'],
-  ['tired', "I'm too tired"],
-  ['not-understood', "I don't understand what to do"],
-  ['cannot-see-or-hear', "I can't see or hear it well enough"],
-  ['physically-unable', "I can't physically do it"],
-  ['device-problem', 'Something is wrong with the device'],
-  ['other', 'Something else'],
-];
-
-const title = 'Can you tell us why?';
+const en = {
+  title: 'Can you tell us why?',
+  spoken: "That's fine. Can you tell us why? Tap one answer.",
+  where: 'Where does it hurt?',
+  reasons: {
+    pain: 'It hurts',
+    tired: "I'm too tired",
+    'not-understood': "I don't understand what to do",
+    'cannot-see-or-hear': "I can't see or hear it well enough",
+    'physically-unable': "I can't physically do it",
+    'device-problem': 'Something is wrong with the device',
+    other: 'Something else',
+  } satisfies Record<SkipReason, string>,
+};
+const copy: Record<Language, typeof en> = {
+  en,
+  ro: {
+    title: 'Ne puteți spune de ce?',
+    spoken: 'Nicio problemă. Ne puteți spune de ce? Atingeți un răspuns.',
+    where: 'Unde vă doare?',
+    reasons: {
+      pain: 'Mă doare',
+      tired: 'Nu mai am putere',
+      'not-understood': 'Nu înțeleg ce trebuie să fac',
+      'cannot-see-or-hear': 'Nu văd sau nu aud destul de bine',
+      'physically-unable': 'Fizic nu pot',
+      'device-problem': 'Ceva nu merge la aparat',
+      other: 'Altceva',
+    },
+  },
+};
 
 type CannotDoProps = {
   language: Language;
@@ -28,7 +48,7 @@ export function CannotDo({ language, onAnswer }: CannotDoProps) {
   const [step, setStep] = useState<'reason' | 'pain' | 'note'>('reason');
 
   if (step === 'pain') {
-    return <BodyMap title="Where does it hurt?" language={language} onPick={(painLocation) => onAnswer({ reason: 'pain', painLocation })} />;
+    return <BodyMap title={copy[language].where} language={language} onPick={(painLocation) => onAnswer({ reason: 'pain', painLocation })} />;
   }
   if (step === 'note') return <SpokenNote language={language} onDone={(note) => onAnswer({ reason: 'other', note })} />;
 
@@ -42,13 +62,14 @@ export function CannotDo({ language, onAnswer }: CannotDoProps) {
 }
 
 function Reasons({ language, onPick }: { language: Language; onPick: (reason: SkipReason) => void }) {
-  useSpoken(`That's fine. ${title} Tap one answer.`, language);
+  const t = copy[language];
+  useSpoken(t.spoken, language);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 p-6 text-[20pt]">
-      <h1 className="text-[32pt] font-bold leading-tight">{title}</h1>
+    <main lang={language} className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 p-6 text-[20pt]">
+      <h1 className="text-[32pt] font-bold leading-tight">{t.title}</h1>
       <div className="flex flex-col gap-3">
-        {reasons.map(([reason, label]) => (
+        {(Object.entries(t.reasons) as [SkipReason, string][]).map(([reason, label]) => (
           <TapButton key={reason} variant="secondary" className="py-3 text-left" onTap={() => onPick(reason)}>
             <span className="text-[20pt] leading-tight">{label}</span>
           </TapButton>

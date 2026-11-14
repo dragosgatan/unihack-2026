@@ -61,4 +61,21 @@ describe('HomeRoutes', () => {
     await typePin('1234');
     expect(await screen.findByRole('button', { name: 'I fell or felt unwell' })).toBeDefined();
   });
+
+  it('keeps the language picked on the pairing screen and switches it from the today screen', async () => {
+    renderHome('/patient/home');
+    press('Română');
+    expect(screen.getByRole('heading', { name: 'Introduceți codul de asociere' })).toBeDefined();
+
+    await typePin('123456');
+    expect(await screen.findByRole('heading', { name: 'Alegeți un PIN din 4 cifre' })).toBeDefined();
+    expect(loadDevice()?.language).toBe('ro');
+
+    await typePin('1234');
+    await typePin('1234');
+    press('Gata');
+    press('English');
+    expect(await screen.findByRole('button', { name: 'I fell or felt unwell' })).toBeDefined();
+    expect(loadDevice()?.language).toBe('en');
+  });
 });
