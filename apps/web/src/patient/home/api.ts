@@ -1,5 +1,6 @@
-import { routes } from '@tempo/shared';
-import { homeDataSchema, loadHomeData, saveHomeData, type HomeData } from './data.ts';
+import { routes, type HomeData, type SubmittedResult } from '@tempo/shared';
+import { loadOutbox } from '../session/store.ts';
+import { loadHomeData, recordFinished, saveHomeData } from './data.ts';
 
 export class Unpaired extends Error {}
 
@@ -26,13 +27,19 @@ export async function startHomeSession(token: string) {
   return routes.startHomeSession.response.parse(await res.json());
 }
 
-// shortcut: GET /api/device/home is not on the server yet, so any failure falls back to what this phone recorded itself.
+const finishedAt = (results: SubmittedResult[]) =>
+  new Date(Math.max(...results.map((result) => Date.parse(result.status === 'completed' ? result.completedAt : result.skippedAt))));
+
 export async function fetchHomeData(token: string): Promise<HomeData> {
   try {
-    const res = await fetch('/api/device/home', { headers: bearer(token) });
+    const unsent = (await loadOutbox()).filter((entry) => entry.token === token && entry.body.results.length > 0);
+    const res = await fetch(routes.getDeviceHome.path, { headers: bearer(token) });
     checkPaired(res);
     if (res.ok) {
-      const data = homeDataSchema.parse(await res.json());
+      const data = unsent.reduce(
+        (merged, { body }) => recordFinished(merged, body.results, finishedAt(body.results)),
+        routes.getDeviceHome.response.parse(await res.json()),
+      );
       saveHomeData(data);
       return data;
     }

@@ -1,4 +1,5 @@
 import type { Language } from '@tempo/shared';
+import { browserLanguage } from '../feedback.ts';
 import { Screen } from '../Screen.tsx';
 import { TapButton } from '../TapButton.tsx';
 
@@ -20,6 +21,10 @@ const en = {
   text: 'Then you can open Tempo like any other app.',
   add: 'Add to home screen',
   notNow: 'Not now',
+  firstTitle: 'First add Tempo to your home screen',
+  first: (code: string) =>
+    `Tap the Share button, then Add to Home Screen. Open Tempo from the new icon and type your code there${code ? `: ${code.split('').join(' ')}` : ''}.`,
+  stay: 'Use Tempo in this browser',
 };
 const copy: Record<Language, typeof en> = {
   en,
@@ -30,6 +35,10 @@ const copy: Record<Language, typeof en> = {
     text: 'Apoi puteți deschide Tempo ca pe orice altă aplicație.',
     add: 'Adaugă pe ecranul principal',
     notNow: 'Nu acum',
+    firstTitle: 'Mai întâi adăugați Tempo pe ecranul principal',
+    first: (code) =>
+      `Atingeți butonul Partajare, apoi Adaugă pe ecranul principal. Deschideți Tempo din noua pictogramă și introduceți acolo codul${code ? `: ${code.split('').join(' ')}` : ''}.`,
+    stay: 'Folosesc Tempo în acest browser',
   },
 };
 
@@ -66,6 +75,23 @@ export function InstallPrompt({ language, onDone }: { language: Language; onDone
       secondary={
         <TapButton variant="secondary" onTap={onDone}>
           {t.notNow}
+        </TapButton>
+      }
+    />
+  );
+}
+
+export function InstallFirst({ code, onStay }: { code: string; onStay: () => void }) {
+  const language = browserLanguage();
+  const t = copy[language];
+  return (
+    <Screen
+      title={t.firstTitle}
+      text={t.first(code)}
+      language={language}
+      action={
+        <TapButton variant="secondary" onTap={onStay}>
+          {t.stay}
         </TapButton>
       }
     />

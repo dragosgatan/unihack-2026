@@ -1,30 +1,19 @@
 import { z } from 'zod';
 import {
-  activityIdSchema,
   devicePairingCodeResponseSchema,
-  isoDateTimeSchema,
+  homeDataSchema,
   localDate,
   sessionDue,
-  sessionPlanSchema,
   type ActivityId,
+  type HomeData,
   type IsoDate,
   type SessionPlan,
   type SessionPlanItem,
   type SubmittedResult,
 } from '@tempo/shared';
 
-// shortcut: mirrors the GET /api/device/home response asked of C; move it to packages/shared when that route lands.
-export const homeDataSchema = z.object({
-  plan: sessionPlanSchema.optional(),
-  lastSessionAt: isoDateTimeSchema.optional(),
-  checkIns: z.array(isoDateTimeSchema),
-  pain: z.array(z.object({ t: isoDateTimeSchema, intensity: z.number().int().min(0).max(10) })),
-  exercises: z.array(z.object({ t: isoDateTimeSchema, activityId: activityIdSchema, repetitions: z.number().int().nonnegative() })),
-});
-
 export const homeDeviceSchema = devicePairingCodeResponseSchema.extend({ pinHash: z.string().optional() });
 
-export type HomeData = z.infer<typeof homeDataSchema>;
 export type HomeDevice = z.infer<typeof homeDeviceSchema>;
 
 export const homePath = '/patient/home';
@@ -51,6 +40,12 @@ export const forgetDevice = () => {
   localStorage.removeItem(deviceKey);
   localStorage.removeItem(dataKey);
 };
+
+export const isInstalled = () =>
+  window.matchMedia?.('(display-mode: standalone)').matches || ('standalone' in navigator && navigator.standalone === true);
+
+// Safari keeps a home screen app's storage apart from the browser's, so a phone paired in Safari opens unpaired from the icon.
+export const storageSplitOnInstall = () => 'standalone' in navigator && !isInstalled();
 
 export const pinHash = async (deviceId: string, pin: string) => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${deviceId}:${pin}`));
@@ -80,9 +75,10 @@ export const recordFinished = (data: HomeData, results: SubmittedResult[], at: D
   const since = at.getTime() - keptDays * dayMs;
   const recent = <E extends { t: string }>(entries: E[]) => entries.filter((entry) => Date.parse(entry.t) >= since);
   const checkedIn = results.some((result) => result.status === 'completed' && isCheckIn(activityOf(result)));
+  const later = data.lastSessionAt === undefined || at.getTime() > Date.parse(data.lastSessionAt);
   return {
     ...data,
-    lastSessionAt: results.some((result) => !isCheckIn(activityOf(result))) ? t : data.lastSessionAt,
+    lastSessionAt: later && results.some((result) => !isCheckIn(activityOf(result))) ? t : data.lastSessionAt,
     checkIns: [...(checkedIn ? [t] : []), ...data.checkIns.filter((checkIn) => Date.parse(checkIn) >= since)],
     pain: [
       ...results.flatMap((result) =>

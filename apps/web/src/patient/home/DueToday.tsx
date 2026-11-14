@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import type { ActivityId, Language, SessionPlanItem } from '@tempo/shared';
+import type { ActivityId, HomeData, Language, SessionPlanItem } from '@tempo/shared';
 import { GroupedList, GroupedListRow } from '../../ui/index.ts';
 import { useSpoken, voices } from '../feedback.ts';
 import { LanguageSwitch } from '../LanguageSwitch.tsx';
@@ -9,7 +9,7 @@ import { startRunner } from '../session/runner.ts';
 import { loadRunner, saveRunner, syncEpisodes, syncOutbox } from '../session/store.ts';
 import { TapButton } from '../TapButton.tsx';
 import { fetchHomeData, startHomeSession, Unpaired } from './api.ts';
-import { checkInStreak, dueToday, loadHomeData, saveHomeData, weekRepetitions, type HomeData, type HomeDevice } from './data.ts';
+import { checkInStreak, dueToday, loadHomeData, saveHomeData, weekRepetitions, type HomeDevice } from './data.ts';
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 // Romanian puts "de" before the noun from 20 on, unless the last two digits are 01 to 19 (101 exerciții, 120 de exerciții).

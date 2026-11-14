@@ -37,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, 'standalone');
 });
 
 describe('HomeRoutes', () => {
@@ -77,5 +78,19 @@ describe('HomeRoutes', () => {
     press('English');
     expect(await screen.findByRole('button', { name: 'I fell or felt unwell' })).toBeDefined();
     expect(loadDevice()?.language).toBe('en');
+  });
+
+  it('in Safari, asks to install first and pairs in the browser only when the patient chooses to', async () => {
+    Object.defineProperty(navigator, 'standalone', { value: false, configurable: true });
+    renderHome('/patient/home?code=123456');
+    expect(screen.getByRole('heading', { name: 'First add Tempo to your home screen' })).toBeDefined();
+    expect(screen.getByText(/type your code there: 1 2 3 4 5 6\./)).toBeDefined();
+    expect(fetch).not.toHaveBeenCalled();
+
+    press('Use Tempo in this browser');
+    expect(await screen.findByRole('heading', { name: 'Choose a 4-digit PIN' })).toBeDefined();
+    await typePin('1234');
+    await typePin('1234');
+    expect(await screen.findByRole('button', { name: 'I fell or felt unwell' })).toBeDefined();
   });
 });

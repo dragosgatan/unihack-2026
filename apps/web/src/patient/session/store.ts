@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import {
-  episodeTypeSchema,
+  deviceEpisodeRequestSchema,
   idSchema,
-  isoDateTimeSchema,
   recordingMaxBytes,
   routes,
   submitSessionRequestSchema,
@@ -19,20 +18,12 @@ const outboxEntrySchema = z.object({
 
 export type OutboxEntry = z.infer<typeof outboxEntrySchema>;
 
-// shortcut: body of POST /api/device/episodes asked of C; move it to packages/shared when that route lands.
 const episodeEntrySchema = z.object({
   token: z.string().min(1),
-  body: z.object({
-    id: idSchema,
-    type: episodeTypeSchema,
-    count: z.number().int().positive(),
-    occurredAt: isoDateTimeSchema,
-    description: z.string().min(1).optional(),
-  }),
+  body: deviceEpisodeRequestSchema,
 });
 
 export type EpisodeEntry = z.infer<typeof episodeEntrySchema>;
-const episodesPath = '/api/device/episodes';
 
 const currentKey = 'current';
 let opening: Promise<IDBDatabase> | undefined;
@@ -139,16 +130,18 @@ async function send(entry: OutboxEntry) {
   routes.submitSession.response.parse(await res.json());
 }
 
+export async function loadOutbox(): Promise<OutboxEntry[]> {
+  const stored: unknown[] = await requestDone((await database()).transaction('outbox').objectStore('outbox').getAll());
+  return stored.flatMap((item) => {
+    const parsed = outboxEntrySchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 async function deleteUnreferencedRecordings() {
   if (await loadRunner()) return;
+  const referenced = new Set((await loadOutbox()).flatMap((entry) => recordingsOf(entry).map((recording) => recording.id)));
   const db = await database();
-  const kept: unknown[] = await requestDone(db.transaction('outbox').objectStore('outbox').getAll());
-  const referenced = new Set(
-    kept.flatMap((item) => {
-      const parsed = outboxEntrySchema.safeParse(item);
-      return parsed.success ? recordingsOf(parsed.data).map((recording) => recording.id) : [];
-    }),
-  );
   const keys = await requestDone(db.transaction('recordings').objectStore('recordings').getAllKeys());
   const tx = db.transaction('recordings', 'readwrite');
   for (const key of keys) if (!referenced.has(String(key))) tx.objectStore('recordings').delete(key);
@@ -190,12 +183,13 @@ export async function syncEpisodes() {
       console.error('Unreadable episode kept', parsed.error);
       continue;
     }
-    const res = await fetch(episodesPath, {
+    const res = await fetch(routes.logDeviceEpisode.path, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${parsed.data.token}` },
       body: JSON.stringify(parsed.data.body),
     });
     if (!res.ok) throw new Error(`Episode ${parsed.data.body.id} not sent, status ${res.status}`);
+    routes.logDeviceEpisode.response.parse(await res.json());
     const tx = (await database()).transaction('episodes', 'readwrite');
     tx.objectStore('episodes').delete(parsed.data.body.id);
     await transactionDone(tx);

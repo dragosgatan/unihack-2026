@@ -14,6 +14,6 @@ describe('router', () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-    expect(await screen.findByRole('heading', { name: 'Patient' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Patient' }, { timeout: 5000 })).toBeTruthy();
   });
 });

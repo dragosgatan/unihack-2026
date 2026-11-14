@@ -9,11 +9,16 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      workbox: { globIgnores: ['**/*.wasm'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,wasm,task}'],
+        // The pose runtime (11.2 MB) and model (5.8 MB) are over workbox's 2 MB default and must be precached for offline exercises.
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+      },
       manifest: {
         name: 'Tempo',
         short_name: 'Tempo',
-        start_url: '/',
+        start_url: '/patient/home',
+        scope: '/',
         display: 'standalone',
       },
     }),

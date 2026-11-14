@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionPlan, SubmittedResult } from '@tempo/shared';
-import { checkInStreak, dueToday, homeDataSchema, recordFinished, weekRepetitions, type HomeData } from './data.ts';
+import { homeDataSchema, type HomeData, type SessionPlan, type SubmittedResult } from '@tempo/shared';
+import { checkInStreak, dueToday, recordFinished, weekRepetitions } from './data.ts';
 
 const tz = 'Europe/Bucharest';
 const now = new Date('2026-11-14T10:00:00.000Z');
@@ -55,6 +55,11 @@ describe('recordFinished', () => {
     expect(data.checkIns).toEqual([now.toISOString()]);
     expect(data.pain).toEqual([{ t: now.toISOString(), intensity: 4 }]);
   });
+
+  it('does not move the last session back for an older session still in the outbox', () => {
+    const newer = '2026-11-14T12:00:00.000Z';
+    expect(recordFinished({ ...empty, lastSessionAt: newer }, results, now).lastSessionAt).toBe(newer);
+  });
 });
 
 describe('dueToday', () => {
@@ -79,6 +84,11 @@ describe('checkInStreak', () => {
     expect(checkInStreak(checkIns, now, tz)).toBe(3);
     expect(checkInStreak(['2026-11-14T08:00:00.000Z', ...checkIns], now, tz)).toBe(4);
     expect(checkInStreak(['2026-11-11T08:00:00.000Z'], now, tz)).toBe(0);
+  });
+
+  it('counts a session with three check-in entries as one day', () => {
+    const t = '2026-11-14T08:00:00.000Z';
+    expect(checkInStreak([t, t, t, '2026-11-13T08:00:00.000Z'], now, tz)).toBe(2);
   });
 });
 

@@ -7,9 +7,21 @@ import { CodeEntry } from '../session/CodeEntry.tsx';
 import { SessionRunner } from '../session/SessionRunner.tsx';
 import { TapButton } from '../TapButton.tsx';
 import { pairDevice } from './api.ts';
-import { forgetDevice, homePath, loadDevice, loadHomeData, pinHash, recordFinished, saveDevice, saveHomeData, type HomeDevice } from './data.ts';
+import {
+  forgetDevice,
+  homePath,
+  isInstalled,
+  loadDevice,
+  loadHomeData,
+  pinHash,
+  recordFinished,
+  saveDevice,
+  saveHomeData,
+  storageSplitOnInstall,
+  type HomeDevice,
+} from './data.ts';
 import { DueToday } from './DueToday.tsx';
-import { InstallPrompt } from './InstallPrompt.tsx';
+import { InstallFirst, InstallPrompt } from './InstallPrompt.tsx';
 import { LogEpisode } from './LogEpisode.tsx';
 
 const pinLength = 4;
@@ -49,9 +61,6 @@ const copy: Record<Language, typeof en> = {
     forgot: 'Am uitat PIN-ul',
   },
 };
-
-const isInstalled = () =>
-  window.matchMedia?.('(display-mode: standalone)').matches || ('standalone' in navigator && navigator.standalone === true);
 
 function ChoosePin({ device, onChosen }: { device: HomeDevice; onChosen: (pin: string) => void }) {
   const [first, setFirst] = useState<string>();
@@ -136,6 +145,7 @@ export function HomeRoutes() {
   const [device, setDevice] = useState(loadDevice);
   const [unlocked, setUnlocked] = useState(false);
   const [askInstall, setAskInstall] = useState(false);
+  const [stayInBrowser, setStayInBrowser] = useState(false);
 
   const keep = (next: HomeDevice) => {
     saveDevice(next);
@@ -147,6 +157,10 @@ export function HomeRoutes() {
     setDevice(undefined);
     setUnlocked(false);
   }, []);
+
+  if (!device && storageSplitOnInstall() && !stayInBrowser) {
+    return <InstallFirst code={params.get('code') ?? ''} onStay={() => setStayInBrowser(true)} />;
+  }
 
   if (!device) {
     return (
@@ -167,7 +181,7 @@ export function HomeRoutes() {
           pinHash(device.deviceId, pin).then((hash) => {
             keep({ ...device, pinHash: hash });
             setUnlocked(true);
-            setAskInstall(!isInstalled());
+            setAskInstall(!isInstalled() && !storageSplitOnInstall());
           }, console.error);
         }}
       />
