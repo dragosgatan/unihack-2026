@@ -3,7 +3,9 @@ import { functionParameters } from './function-parameters.ts';
 import type { AiFunctionCall, AiPart, AiProvider, AiRequest, AiTask } from './provider.ts';
 
 export const geminiModel = 'gemini-3.8-flash';
-export const geminiFallbackModel = 'gemini-3.5-flash';
+type ModelChain = readonly [string, ...string[]];
+const pipelineModels: ModelChain = [geminiModel, 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+const assistantModels: ModelChain = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', geminiModel];
 const busyStatuses = new Set([429, 503]);
 export const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 export const geminiApiRevision = '2026-05-20';
@@ -56,11 +58,10 @@ const stripUnsupported = (node: unknown): unknown => {
   );
 };
 
-// A voice turn has to answer in about a second: gemini-3.5-flash does with minimal thinking, while gemini-3.8-flash took over ten seconds and answered 400 to that thinking level.
-const modelsFor = (task: AiTask): [string, string] =>
-  task === 'assistant' ? [geminiFallbackModel, geminiModel] : [geminiModel, geminiFallbackModel];
+// Free-tier quotas are counted per model, so a busy model hands over to the next one. A voice turn has to answer in about a second, which the lite models do and gemini-3.8-flash does not, so the assistant starts from the small end.
+export const geminiModelsFor = (task: AiTask): ModelChain => (task === 'assistant' ? assistantModels : pipelineModels);
 
-const outputFormat = (request: AiRequest, model: string) =>
+const outputFormat = (request: AiRequest) =>
   'tools' in request
     ? {
         tools: request.tools.map(({ name, description, parameters }) => ({
@@ -69,7 +70,7 @@ const outputFormat = (request: AiRequest, model: string) =>
           description,
           parameters: functionParameters(parameters),
         })),
-        generation_config: { tool_choice: 'any', ...(model === geminiFallbackModel ? { thinking_level: 'minimal' } : {}) },
+        generation_config: { tool_choice: 'any', thinking_level: 'low' },
       }
     : {
         response_format: {
@@ -83,7 +84,7 @@ export const geminiRequestBody = (request: AiRequest, model: string = geminiMode
   model,
   system_instruction: request.system,
   input: request.parts.map(toContent),
-  ...outputFormat(request, model),
+  ...outputFormat(request),
   store: false,
 });
 
@@ -145,9 +146,13 @@ export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: Gemin
         body: JSON.stringify(geminiRequestBody(request, model)),
         signal: AbortSignal.timeout(timeoutFor(request.task)),
       });
-    const [preferred, fallback] = modelsFor(request.task);
-    const first = await send(preferred);
-    const response = busyStatuses.has(first.status) ? await send(fallback) : first;
+    const firstAvailable = async (model: string, rest: readonly string[]): Promise<{ model: string; response: Response }> => {
+      const response = await send(model);
+      const [next, ...later] = rest;
+      return busyStatuses.has(response.status) && next !== undefined ? firstAvailable(next, later) : { model, response };
+    };
+    const [preferred, ...others] = geminiModelsFor(request.task);
+    const { model: sentTo, response } = await firstAvailable(preferred, others);
     if (!response.ok) throw new GeminiRequestError(`Gemini request for ${request.task} failed`, response.status);
     const interaction = interactionSchema.safeParse(await response.json());
     if (!interaction.success) throw new GeminiRequestError(`Gemini response for ${request.task} has an unknown shape`);
@@ -155,7 +160,7 @@ export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: Gemin
     if (status !== undefined && !finishedStatuses(request).has(status)) {
       throw new GeminiRequestError(`Gemini interaction for ${request.task} ended as ${status}`);
     }
-    const model = interaction.data.model ?? preferred;
+    const model = interaction.data.model ?? sentTo;
     if ('tools' in request) return { data: undefined, model, calls: functionCalls(interaction.data) };
     return { data: parseJson(outputText(interaction.data)), model };
   },

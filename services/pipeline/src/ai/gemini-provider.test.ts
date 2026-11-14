@@ -8,8 +8,8 @@ import {
   geminiApiRevision,
   geminiAssistantTimeoutMs,
   geminiEndpoint,
-  geminiFallbackModel,
   geminiModel,
+  geminiModelsFor,
   geminiTimeoutMs,
 } from './gemini-provider.ts';
 import type { AiRequest } from './provider.ts';
@@ -123,13 +123,13 @@ describe('Gemini provider', () => {
     expect((await provider.generate(request)).data).toBeUndefined();
   });
 
-  it('asks the fallback model once when the first one is busy', async () => {
+  it('moves to the next model when the first one is busy', async () => {
     const responses = [json({ error: { code: 'service_unavailable' } }, 503), json(interaction('{"transcript":"","words":[]}'))];
     const { fetchImpl, calls } = fakeFetch(() => responses.shift() ?? json({}, 500));
     const provider = createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl });
     await provider.generate(request);
     const models = calls.map((call) => (JSON.parse(String(call.init.body)) as { model: string }).model);
-    expect(models).toEqual([geminiModel, geminiFallbackModel]);
+    expect(models).toEqual(geminiModelsFor(request.task).slice(0, 2));
   });
 
   it('reports HTTP failures with the status only, never the key', async () => {
@@ -193,10 +193,10 @@ describe('Gemini provider with function tools', () => {
     const body = bodyOf(calls[0]);
     expect(body).not.toHaveProperty('response_format');
     expect(body).toMatchObject({
-      model: geminiFallbackModel,
+      model: geminiModelsFor('assistant')[0],
       system_instruction: 'assistant prompt',
       store: false,
-      generation_config: { tool_choice: 'any', thinking_level: 'minimal' },
+      generation_config: { tool_choice: 'any', thinking_level: 'low' },
       input: [
         { type: 'text', text: 'The user speaks Romanian.' },
         { type: 'audio', mime_type: 'audio/m4a', data: 'Bw==' },
@@ -221,13 +221,15 @@ describe('Gemini provider with function tools', () => {
     expect(timeout).toHaveBeenCalledWith(geminiAssistantTimeoutMs);
   });
 
-  it('falls back to the larger model without a thinking level when the fast one is busy', async () => {
-    const responses = [new Response('busy', { status: 429 }), json(callInteraction('requires_action'))];
-    const { fetchImpl, calls } = fakeFetch(() => responses.shift() ?? json({}, 500));
-    await createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl }).generate(toolsRequest);
+  it('walks the whole model chain while models are busy and reports the last status', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => new Response('busy', { status: 429 }));
+    const error = await createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl })
+      .generate(toolsRequest)
+      .catch((caught: unknown) => caught);
 
-    expect(calls.map((call) => bodyOf(call)['model'])).toEqual([geminiFallbackModel, geminiModel]);
-    expect(bodyOf(calls[1])['generation_config']).toEqual({ tool_choice: 'any' });
+    expect(calls.map((call) => bodyOf(call)['model'])).toEqual([...geminiModelsFor('assistant')]);
+    expect(geminiModelsFor('assistant')[0]).not.toBe(geminiModel);
+    expect(error).toMatchObject({ status: 429 });
   });
 
   it.each(['completed', 'requires_action'])('reads the function calls of a %s interaction', async (status) => {
