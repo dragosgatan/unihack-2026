@@ -63,7 +63,7 @@ describe('mock demo session codes', () => {
     const series = routes.getMetricSeries.response.parse(
       (await call(app, '/api/patients/pat-1/metrics/finger-tapping.taps-per-second?range=W&side=right')).body,
     );
-    expect(series.points.filter((point) => point.t === completedAt)).toEqual([{ t: completedAt, value: 0.2 }]);
+    expect(series.points.filter((point) => point.t === completedAt)).toEqual([{ t: completedAt, value: 0.2, sessionId: session.id }]);
   });
 
   it('runs the skip rules on submit: status, skip event without a point, pain flag and one alert', async () => {

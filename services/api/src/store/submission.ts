@@ -1,4 +1,12 @@
-import type { ActivityId, ActivityResult, Session, SkipEvent, SkipReason, SubmittedResult } from '@tempo/shared';
+import type {
+  ActivityId,
+  ActivityResult,
+  CheckInEntry,
+  Session,
+  SkipEvent,
+  SkipReason,
+  SubmittedResult,
+} from '@tempo/shared';
 
 const skipLabels: Record<SkipReason, string> = {
   pain: 'Skipped because of pain',
@@ -41,3 +49,22 @@ export const storedSkips = (session: Session, results: SubmittedResult[]): Store
         ]
       : [],
   );
+
+export const storedCheckIns = (session: Session, results: SubmittedResult[]): CheckInEntry[] =>
+  results.flatMap((result, index) => {
+    if (result.status !== 'completed') return [];
+    const { raw } = result;
+    if (raw.activityId !== 'check-in-pain' && raw.activityId !== 'check-in-medication' && raw.activityId !== 'check-in-episodes') {
+      return [];
+    }
+    return [
+      {
+        id: resultId(session.id, index),
+        patientId: session.patientId,
+        sessionId: session.id,
+        recordedAt: result.completedAt,
+        recordedBy: { kind: 'patient' },
+        body: raw.data,
+      },
+    ];
+  });

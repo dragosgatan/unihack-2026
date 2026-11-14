@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   baselineKey,
+  checkInKey,
+  checkInRange,
   codeKey,
   currentPlanKey,
   deviceKey,
@@ -10,6 +12,7 @@ import {
   keyOfFlag,
   latestKey,
   painAlertKey,
+  patientFlagPrefix,
   patientIndexKey,
   patientKey,
   planVersionKey,
@@ -94,11 +97,22 @@ describe('table keys', () => {
     expect(pain).toEqual({ pk: 'PATIENT#pat-1', sk: 'FLAG#sess-1#pain-skip#shoulder-raise' });
     expect(pain.sk.startsWith(flagPrefix('sess-1'))).toBe(true);
     expect(skipFlagKey('pat-1', 'sess-1', 'repeated-skip', 'shoulder-raise')).not.toEqual(pain);
+    expect(pain.sk.startsWith(patientFlagPrefix)).toBe(true);
     const base = { id: 'f', patientId: 'pat-1', sessionId: 'sess-1', createdAt: t } as const;
     expect(keyOfFlag({ ...base, kind: 'pain-skip', activityId: 'shoulder-raise', stage: 'task' })).toEqual(pain);
     expect(
       keyOfFlag({ ...base, kind: 'reliable-change', metricId: 'pain.intensity', value: 6, baseline: 3 }),
     ).toEqual(flagKey('pat-1', 'sess-1', 'pain.intensity', undefined));
+  });
+
+  it('builds check-in keys under the patient that sort by time and fall inside a range ending at their own time', () => {
+    const key = checkInKey('pat-1', t, 'sess-9-r00');
+    expect(key).toEqual({ pk: 'PATIENT#pat-1', sk: `CHECKIN#${t}#sess-9-r00` });
+    const [low, high] = checkInRange('2026-11-01T00:00:00.000Z', t);
+    expect(key.sk > low && key.sk < high).toBe(true);
+    const [, before] = checkInRange('2026-11-01T00:00:00.000Z', '2026-11-13T09:59:59.999Z');
+    expect(key.sk > before).toBe(true);
+    expect(checkInKey('pat-1', '2026-11-12T10:00:00.000Z', 'sess-9-r00').sk < key.sk).toBe(true);
   });
 
   it('keeps the pain alert marker under the session', () => {

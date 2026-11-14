@@ -51,6 +51,12 @@ export const pairingSuite = (factory: HarnessFactory): void => {
       });
       expect(home.session.startedBy).toBeUndefined();
       expect(home.plan.id).toBe(h.id('plan-2'));
+      expect(home.plan.items.find((item) => item.activityId === 'check-in-medication')?.config).toEqual({
+        medications: [
+          { medicationId: 'med-3', name: 'Clopidogrel' },
+          { medicationId: 'med-4', name: 'Atorvastatin' },
+        ],
+      });
 
       const submitPath = `/api/sessions/${home.session.id}/submit`;
       expect(

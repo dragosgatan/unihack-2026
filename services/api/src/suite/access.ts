@@ -57,6 +57,8 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${parkinson}/devices`, { token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/devices/dev-1/revoke`, { method: 'POST', token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/suggestions`, { token }), 404, 'not_found');
+      expectError(await call(h.app, `${parkinson}/sessions`, { token }), 404, 'not_found');
+      expectError(await call(h.app, `${parkinson}/flags`, { token }), 404, 'not_found');
       expect((await call(h.app, `/api/patients/${h.id('pat-2')}`, { token })).status).toBe(200);
     });
 
@@ -76,6 +78,8 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${patient}/devices`, { token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/devices/dev-1/revoke`, { method: 'POST', token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/suggestions`, { token }), 403, 'forbidden');
+      expectError(await call(h.app, `${patient}/sessions`, { token }), 403, 'forbidden');
+      expectError(await call(h.app, `${patient}/flags`, { token }), 403, 'forbidden');
     });
 
     it('lets every staff role use the lookups, which hold no patient data', async () => {

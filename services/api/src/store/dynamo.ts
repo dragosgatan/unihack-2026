@@ -15,6 +15,7 @@ import { z } from 'zod';
 import {
   activityResultSchema,
   baselineSchema,
+  checkInEntrySchema,
   flagSchema,
   isoDateTimeSchema,
   medicalRecordSchema,
@@ -34,6 +35,8 @@ import {
 import {
   baselineKey,
   baselinePrefix,
+  checkInKey,
+  checkInRange,
   codeKey,
   currentPlanKey,
   deviceKey,
@@ -48,6 +51,7 @@ import {
   patientIndexPrefix,
   patientKey,
   painAlertKey,
+  patientFlagPrefix,
   patientPk,
   planVersionKey,
   pointKey,
@@ -69,7 +73,7 @@ import {
   suggestionPrefix,
   type Key,
 } from './keys.ts';
-import { storedResults, storedSkips } from './submission.ts';
+import { storedCheckIns, storedResults, storedSkips } from './submission.ts';
 import { newestFirst } from './suggestions.ts';
 import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
 
@@ -106,8 +110,8 @@ const dataName = { '#data': 'data' };
 const dataOf = (item: Item | undefined): unknown => item?.['data'];
 
 const point = (item: Item): MetricPoint => {
-  const { t, value } = metricValueSchema.parse(dataOf(item));
-  return { t, value };
+  const { t, value, sessionId } = metricValueSchema.parse(dataOf(item));
+  return { t, value, sessionId };
 };
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -254,6 +258,10 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
         ...storedSkips(session, results).map(({ activityId, event }) => ({
           ...skipKey(session.patientId, activityId, event.t, session.id),
           data: event,
+        })),
+        ...storedCheckIns(session, results).map((entry) => ({
+          ...checkInKey(entry.patientId, entry.recordedAt, entry.id),
+          data: entry,
         })),
       ]);
       try {
@@ -465,6 +473,16 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
 
     listFlags: async (patientId, sessionId) =>
       (await queryPrefix(patientPk(patientId), flagPrefix(sessionId))).map((item) => flagSchema.parse(dataOf(item))),
+
+    listPatientFlags: async (patientId) =>
+      (await queryPrefix(patientPk(patientId), patientFlagPrefix))
+        .map((item) => flagSchema.parse(dataOf(item)))
+        .sort(newestFirst),
+
+    listCheckIns: async (patientId, { from, to }) => {
+      const [low, high] = checkInRange(from, to);
+      return (await queryBetween(patientPk(patientId), low, high)).map((item) => checkInEntrySchema.parse(dataOf(item)));
+    },
 
     putReport: (report) => put({ ...reportKey(report.sessionId), data: report }),
 

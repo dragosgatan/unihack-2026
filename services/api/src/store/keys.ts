@@ -85,7 +85,8 @@ export const resultKey = (sessionId: string, index: number): Key => ({
 
 export const reportKey = (sessionId: string): Key => ({ pk: sessionPk(sessionId), sk: 'REPORT' });
 
-export const flagPrefix = (sessionId: string): string => `FLAG#${sessionId}#`;
+export const patientFlagPrefix = 'FLAG#';
+export const flagPrefix = (sessionId: string): string => `${patientFlagPrefix}${sessionId}#`;
 export const flagKey = (patientId: string, sessionId: string, metricId: MetricId, side: Side | undefined): Key => ({
   pk: patientPk(patientId),
   sk: `${flagPrefix(sessionId)}${metricId}#${sideKey(side)}`,
@@ -116,3 +117,13 @@ export const suggestionKey = (patientId: string, suggestionId: string): Key => (
   pk: patientPk(patientId),
   sk: `${suggestionPrefix}${suggestionId}`,
 });
+
+export const checkInPrefix = 'CHECKIN#';
+export const checkInKey = (patientId: string, recordedAt: string, entryId: string): Key => ({
+  pk: patientPk(patientId),
+  sk: `${checkInPrefix}${recordedAt}#${entryId}`,
+});
+export const checkInRange = (from: string, to: string): [string, string] => [
+  `${checkInPrefix}${from}`,
+  `${checkInPrefix}${to}#￿`,
+];

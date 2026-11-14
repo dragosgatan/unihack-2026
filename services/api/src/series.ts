@@ -1,4 +1,5 @@
 import {
+  defaultSide,
   initialBaseline,
   initialBaselineSessions,
   metricDefinitions,
@@ -14,9 +15,6 @@ import {
 import type { Store } from './store/types.ts';
 
 const rangeDays: Record<MetricRange, number> = { W: 7, M: 30, '6M': 182, Y: 365 };
-
-export const defaultSide = (record: MedicalRecord): Side =>
-  record.injury?.side ?? record.affectedLimbs[0]?.side ?? record.dominantHand;
 
 const sideFor = (metricId: MetricId, record: MedicalRecord, requested?: Side): Side | undefined =>
   metricDefinitions[metricId].lateral ? (requested ?? defaultSide(record)) : undefined;

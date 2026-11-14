@@ -46,7 +46,7 @@ describe('loadSeed', () => {
       .sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
     const all = { from: '2000-01-01T00:00:00.000Z', to: fixedNow.toISOString() };
     const points = await store.listPoints('pat-1', 'finger-tapping.taps-per-second', 'right', all);
-    expect(points).toEqual(right.map(({ t, value }) => ({ t, value })));
+    expect(points).toEqual(right.map(({ t, value, sessionId }) => ({ t, value, sessionId })));
 
     const latest = await store.listLatest('pat-1');
     expect(latest).toContainEqual({

@@ -73,6 +73,7 @@ export const metricDefinitions = {
 export const metricPointSchema = z.object({
   t: isoDateTimeSchema,
   value: z.number(),
+  sessionId: idSchema.optional(),
 });
 
 export const referenceBandSchema = z.object({

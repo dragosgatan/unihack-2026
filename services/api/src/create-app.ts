@@ -17,6 +17,7 @@ import {
   type DeviceClaims,
 } from './auth/device-tokens.ts';
 import type { StaffAuth } from './auth/staff.ts';
+import { planForDevice } from './device-plan.ts';
 import {
   bearerToken,
   errorResponse,
@@ -29,6 +30,7 @@ import {
 import type { PipelineStarter } from './pipeline-starter.ts';
 import type { PublicData } from './public-data/index.ts';
 import { buildMetricSeries, listPatientMetrics } from './series.ts';
+import { newestFirst } from './store/suggestions.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
 const codeLifetimeMs = 10 * 60_000;
@@ -134,6 +136,11 @@ export const createApp = ({
     return { session, code, expiresAt };
   });
 
+  staffRoute(routes.listPatientSessions, async ({ staff, params }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    return { sessions: (await store.listPatientSessions(patient.id)).sort(newestFirst) };
+  });
+
   openRoute(routes.redeemSessionCode, async ({ body }) => {
     const now = clock();
     const sessionToStart = async (): Promise<Session | undefined> => {
@@ -157,7 +164,13 @@ export const createApp = ({
       { sid: session.id, pid: detail.patient.id, inst: detail.patient.institutionId },
       now,
     );
-    return { token, expiresAt, session, plan: detail.plan, patientFirstName: firstName(detail.patient) };
+    return {
+      token,
+      expiresAt,
+      session,
+      plan: planForDevice(detail.plan, detail.record, now),
+      patientFirstName: firstName(detail.patient),
+    };
   });
 
   deviceRoute(routes.submitSession, async ({ device, params, body }) => {
@@ -263,7 +276,7 @@ export const createApp = ({
       startedAt: now.toISOString(),
     };
     await store.putSession(session);
-    return { session, plan: detail.plan };
+    return { session, plan: planForDevice(detail.plan, detail.record, now) };
   });
 
   staffRoute(routes.lookupMedications, ({ query }) => publicData.searchMedications(query.q));
@@ -284,6 +297,11 @@ export const createApp = ({
     });
     if (!suggestion) throw new HttpError('not_found', 'Suggestion not found');
     return { suggestion };
+  });
+
+  staffRoute(routes.listPatientFlags, async ({ staff, params }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    return { flags: await store.listPatientFlags(patient.id) };
   });
 
   app.notFound(() => errorResponse('not_found', 'Route not found'));

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Flag, Session, Suggestion } from '@tempo/shared';
+import type { Flag, Session, SubmittedResult, Suggestion } from '@tempo/shared';
 import type { Store } from '../store/types.ts';
 
 export type StoreFactory = () => Store;
@@ -133,6 +133,90 @@ export const storeSuite = (factory: StoreFactory): void => {
       await store.putFlags(flags);
       const stored = await store.listFlags(patientId, sessionId);
       expect([...stored].sort((a, b) => (a.id < b.id ? -1 : 1))).toEqual(flags);
+    });
+
+    it('lists every flag of a patient across sessions, newest first', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const older: Flag = {
+        id: unique('flag'),
+        patientId,
+        sessionId: unique('sess'),
+        kind: 'pain-skip',
+        activityId: 'shoulder-raise',
+        stage: 'task',
+        createdAt: '2026-11-01T10:00:00.000Z',
+      };
+      const newer: Flag = {
+        id: unique('flag'),
+        patientId,
+        sessionId: unique('sess'),
+        kind: 'reliable-change',
+        metricId: 'sit-to-stand.count',
+        value: 6,
+        baseline: 10,
+        createdAt: '2026-11-12T10:00:00.000Z',
+      };
+      await store.putFlags([older, newer, { ...newer, id: unique('flag'), patientId: unique('pat') }]);
+      expect(await store.listPatientFlags(patientId)).toEqual([newer, older]);
+      expect(await store.listPatientFlags(unique('pat'))).toEqual([]);
+    });
+  });
+
+  describe('check-in entries', () => {
+    const results: SubmittedResult[] = [
+      {
+        status: 'completed',
+        completedAt: '2026-11-13T10:01:00.000Z',
+        raw: { activityId: 'check-in-pain', data: { item: 'pain', intensity: 3, location: 'right-shoulder' } },
+      },
+      {
+        status: 'completed',
+        completedAt: '2026-11-13T10:02:00.000Z',
+        raw: {
+          activityId: 'check-in-medication',
+          data: { item: 'medication', medications: [{ medicationId: 'med-3', name: 'Clopidogrel', status: 'taken' }] },
+        },
+      },
+      { status: 'skipped', activityId: 'check-in-episodes', reason: 'tired', stage: 'instructions', skippedAt: '2026-11-13T10:03:00.000Z' },
+      {
+        status: 'completed',
+        completedAt: '2026-11-13T10:09:00.000Z',
+        raw: { activityId: 'sit-to-stand', data: { durationMs: 30000, reps: [] } },
+      },
+    ];
+
+    it('keeps each completed check-in of a submitted session once, and nothing for skips or other activities', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const session = { ...sessionFor(patientId, unique('sess'), '2026-11-13T10:00:00.000Z'), status: 'in-progress' as const };
+      await store.putSession(session);
+      const submission = { partial: false, submittedAt: '2026-11-13T10:10:00.000Z', results };
+      expect(await store.submitSession(session, submission)).toBe('submitted');
+      expect(await store.submitSession(session, submission)).toBe('submitted');
+
+      const day = { from: '2026-11-13T00:00:00.000Z', to: '2026-11-13T23:59:59.999Z' };
+      const entries = await store.listCheckIns(patientId, day);
+      expect(entries).toEqual([
+        {
+          id: `${session.id}-r00`,
+          patientId,
+          sessionId: session.id,
+          recordedAt: '2026-11-13T10:01:00.000Z',
+          recordedBy: { kind: 'patient' },
+          body: { item: 'pain', intensity: 3, location: 'right-shoulder' },
+        },
+        {
+          id: `${session.id}-r01`,
+          patientId,
+          sessionId: session.id,
+          recordedAt: '2026-11-13T10:02:00.000Z',
+          recordedBy: { kind: 'patient' },
+          body: { item: 'medication', medications: [{ medicationId: 'med-3', name: 'Clopidogrel', status: 'taken' }] },
+        },
+      ]);
+      expect(await store.listCheckIns(patientId, { from: '2026-11-13T10:01:30.000Z', to: day.to })).toEqual(entries.slice(1));
+      expect(await store.listCheckIns(unique('pat'), day)).toEqual([]);
     });
   });
 };

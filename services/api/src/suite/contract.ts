@@ -55,6 +55,18 @@ export const contractSuite = (factory: HarnessFactory): void => {
       expectValid(routes.submitSession, submitted);
     });
 
+    it.each(seedPatientIds)('GET /api/patients/%s/sessions lists sessions newest first', async (patientId) => {
+      const { sessions } = expectValid(routes.listPatientSessions, await call(h.app, `/api/patients/${h.id(patientId)}/sessions`));
+      expect(sessions.length).toBeGreaterThan(0);
+      for (const session of sessions) expect(session.patientId).toBe(h.id(patientId));
+      const created = sessions.map((session) => session.createdAt);
+      expect(created).toEqual([...created].sort().reverse());
+    });
+
+    it.each(seedPatientIds)('GET /api/patients/%s/flags', async (patientId) => {
+      expectValid(routes.listPatientFlags, await call(h.app, `/api/patients/${h.id(patientId)}/flags`));
+    });
+
     it.each(seedPatientIds)('pairs a phone for %s, starts a home session and revokes the phone', async (patientId) => {
       const base = `/api/patients/${h.id(patientId)}`;
       const { code } = expectValid(routes.createPairingCode, await call(h.app, `${base}/pairing-codes`, { method: 'POST' }));
@@ -86,6 +98,7 @@ export const contractSuite = (factory: HarnessFactory): void => {
             const result = await call(h.app, `/api/patients/${patientId}/metrics/${metric.metricId}?${query}`);
             const series = expectValid(routes.getMetricSeries, result);
             const times = series.points.map((point) => Date.parse(point.t));
+            for (const point of series.points) expect(point.sessionId).toEqual(expect.any(String));
             expect(times).toEqual([...times].sort((a, b) => a - b));
             expect(series.baseline).not.toBeNull();
             if (range !== 'W') expect(series.points.length).toBeGreaterThan(0);

@@ -16,7 +16,7 @@ describe('runPipeline', () => {
       notified: true,
     });
 
-    expect((await allPoints(store, tapsPerSecond, 'right')).at(-1)).toEqual({ t: day(10), value: 2 });
+    expect((await allPoints(store, tapsPerSecond, 'right')).at(-1)).toEqual({ t: day(10), value: 2, sessionId: 'sess-1' });
     expect((await store.listFlags(patient.id, 'sess-1')).map((flag) => flag.kind).sort()).toEqual([
       'pain-skip',
       'reliable-change',

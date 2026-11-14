@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema, languageSchema, sideSchema } from './common.ts';
 import { pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
+import { flagSchema } from './flag.ts';
 import { diagnosisLookupResponseSchema, lookupQuerySchema, medicationLookupResponseSchema } from './lookup.ts';
 import { metricIdSchema, metricSeriesSchema } from './metrics.ts';
 import { medicalRecordSchema } from './record.ts';
@@ -54,6 +55,10 @@ export const createSessionResponseSchema = z.object({
   session: sessionSchema,
   code: sessionCodeSchema,
   expiresAt: isoDateTimeSchema,
+});
+
+export const patientSessionListResponseSchema = z.object({
+  sessions: z.array(sessionSchema),
 });
 
 export const deviceSessionCodeRequestSchema = z.object({
@@ -132,6 +137,10 @@ export const startHomeSessionResponseSchema = z.object({
   plan: sessionPlanSchema,
 });
 
+export const flagListResponseSchema = z.object({
+  flags: z.array(flagSchema),
+});
+
 export const suggestionParamsSchema = z.object({ patientId: idSchema, suggestionId: idSchema });
 
 export const suggestionListResponseSchema = z.object({
@@ -185,6 +194,13 @@ export const routes = {
     params: patientParamsSchema,
     body: createSessionRequestSchema,
     response: createSessionResponseSchema,
+  },
+  listPatientSessions: {
+    method: 'GET',
+    path: '/api/patients/:patientId/sessions',
+    auth: 'staff',
+    params: patientParamsSchema,
+    response: patientSessionListResponseSchema,
   },
   redeemSessionCode: {
     method: 'POST',
@@ -279,6 +295,13 @@ export const routes = {
     body: suggestionDecisionRequestSchema,
     response: suggestionDecisionResponseSchema,
   },
+  listPatientFlags: {
+    method: 'GET',
+    path: '/api/patients/:patientId/flags',
+    auth: 'staff',
+    params: patientParamsSchema,
+    response: flagListResponseSchema,
+  },
 } as const satisfies Record<string, RouteDefinition>;
 
 export type RouteName = keyof typeof routes;
@@ -293,6 +316,7 @@ export type PatientListResponse = z.infer<typeof patientListResponseSchema>;
 export type PatientDetailResponse = z.infer<typeof patientDetailResponseSchema>;
 export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>;
 export type CreateSessionResponse = z.infer<typeof createSessionResponseSchema>;
+export type PatientSessionListResponse = z.infer<typeof patientSessionListResponseSchema>;
 export type DeviceSessionCodeRequest = z.infer<typeof deviceSessionCodeRequestSchema>;
 export type DeviceSessionCodeResponse = z.infer<typeof deviceSessionCodeResponseSchema>;
 export type SubmitSessionRequest = z.infer<typeof submitSessionRequestSchema>;
@@ -313,3 +337,4 @@ export type SuggestionParams = z.infer<typeof suggestionParamsSchema>;
 export type SuggestionListResponse = z.infer<typeof suggestionListResponseSchema>;
 export type SuggestionDecisionRequest = z.infer<typeof suggestionDecisionRequestSchema>;
 export type SuggestionDecisionResponse = z.infer<typeof suggestionDecisionResponseSchema>;
+export type FlagListResponse = z.infer<typeof flagListResponseSchema>;

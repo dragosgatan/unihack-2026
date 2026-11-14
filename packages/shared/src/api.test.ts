@@ -10,6 +10,7 @@ import {
   devicePairingCodeResponseSchema,
   deviceSessionCodeRequestSchema,
   deviceSessionCodeResponseSchema,
+  flagListResponseSchema,
   meResponseSchema,
   metricSeriesParamsSchema,
   metricSeriesQuerySchema,
@@ -18,6 +19,7 @@ import {
   patientListResponseSchema,
   patientMetricsResponseSchema,
   patientParamsSchema,
+  patientSessionListResponseSchema,
   revokeDeviceResponseSchema,
   routes,
   sessionCodeSchema,
@@ -98,6 +100,14 @@ describe('POST /api/patients/:patientId/sessions', () => {
   it('returns the session with a code', () => {
     const response = { session, code: '042917', expiresAt: '2026-11-13T10:15:00.000Z' };
     expect(createSessionResponseSchema.safeParse(response).success).toBe(true);
+  });
+});
+
+describe('GET /api/patients/:patientId/sessions', () => {
+  it('lists the patient’s sessions', () => {
+    const submitted = { ...session, id: 'sess-2', status: 'submitted', submittedAt: '2026-11-13T10:30:00.000Z' };
+    expect(patientSessionListResponseSchema.safeParse({ sessions: [submitted, session] }).success).toBe(true);
+    expect(patientSessionListResponseSchema.safeParse({ sessions: [{ ...session, status: 'done' }] }).success).toBe(false);
   });
 });
 
@@ -199,6 +209,19 @@ describe('POST /api/device/sessions', () => {
   it('returns the home session with its plan', () => {
     const response = { session: { ...session, mode: 'home', status: 'in-progress' }, plan: sessionPlan };
     expect(startHomeSessionResponseSchema.safeParse(response).success).toBe(true);
+  });
+});
+
+describe('GET /api/patients/:patientId/flags', () => {
+  it('lists flags of every kind', () => {
+    const base = { patientId: patient.id, sessionId: session.id, createdAt: '2026-11-13T10:40:00.000Z' };
+    const flags = [
+      { ...base, id: 'flag-1', kind: 'reliable-change', metricId: 'finger-tapping.taps-per-second', side: 'right', value: 2.1, baseline: 4.1 },
+      { ...base, id: 'flag-2', kind: 'pain-skip', activityId: 'shoulder-raise', stage: 'task' },
+      { ...base, id: 'flag-3', kind: 'repeated-skip', activityId: 'shoulder-raise', previousSessionId: 'sess-0', reason: 'pain' },
+    ];
+    expect(flagListResponseSchema.safeParse({ flags }).success).toBe(true);
+    expect(flagListResponseSchema.safeParse({ flags: [{ ...base, id: 'flag-4', kind: 'bad-day' }] }).success).toBe(false);
   });
 });
 

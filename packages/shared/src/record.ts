@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, isoDateSchema, isoDateTimeSchema, sideSchema } from './common.ts';
+import { idSchema, isoDateSchema, isoDateTimeSchema, sideSchema, type Side } from './common.ts';
 
 export const timelineEventSchema = z.object({
   id: idSchema,
@@ -96,3 +96,6 @@ export type Diagnosis = z.infer<typeof diagnosisSchema>;
 export type Medication = z.infer<typeof medicationSchema>;
 export type Limitation = z.infer<typeof limitationSchema>;
 export type MedicalRecord = z.infer<typeof medicalRecordSchema>;
+
+export const defaultSide = (record: MedicalRecord): Side =>
+  record.injury?.side ?? record.affectedLimbs[0]?.side ?? record.dominantHand;

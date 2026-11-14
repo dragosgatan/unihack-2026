@@ -40,8 +40,8 @@ describe('score', () => {
       value: 4,
       scoredBy: 'code',
     });
-    expect(await allPoints(store, tapsPerSecond, 'right')).toEqual([{ t: completedAt, value: 4 }]);
-    expect(await allPoints(store, tapsPerSecond, 'left')).toEqual([{ t: completedAt, value: 2 }]);
+    expect(await allPoints(store, tapsPerSecond, 'right')).toEqual([{ t: completedAt, value: 4, sessionId: 'sess-1' }]);
+    expect(await allPoints(store, tapsPerSecond, 'left')).toEqual([{ t: completedAt, value: 2, sessionId: 'sess-1' }]);
   });
 
   it('leaves a skipped result unscored and writes no point for it', async () => {
@@ -68,7 +68,7 @@ describe('score', () => {
 
     const [again] = await store.listResults('sess-1');
     expect(again?.status === 'completed' && again.scores).toEqual([override, ...(scored.scores ?? [])]);
-    expect(await allPoints(store, tapsPerSecond, 'right')).toEqual([{ t: day(10), value: 4 }]);
+    expect(await allPoints(store, tapsPerSecond, 'right')).toEqual([{ t: day(10), value: 4, sessionId: 'sess-1' }]);
   });
 });
 

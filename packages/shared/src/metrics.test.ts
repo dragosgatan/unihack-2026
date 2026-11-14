@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { activityIdSchema } from './activity.ts';
-import { metricDefinitions, metricIdSchema, metricIds, metricSeriesSchema, skipEventSchema } from './metrics.ts';
+import {
+  metricDefinitions,
+  metricIdSchema,
+  metricIds,
+  metricPointSchema,
+  metricSeriesSchema,
+  skipEventSchema,
+} from './metrics.ts';
 import { levodopaChange, tappingSkipEvent, tapsPerSecondSeries } from './test-fixtures.ts';
 
 describe('metricIdSchema', () => {
@@ -43,5 +50,16 @@ describe('metricSeriesSchema', () => {
     const { id, t, type, label, sessionId, stage } = tappingSkipEvent;
     const series = { ...tapsPerSecondSeries, events: [{ id, t, type, label, sessionId, stage }] };
     expect(metricSeriesSchema.safeParse(series).success).toBe(false);
+  });
+});
+
+describe('metricPointSchema', () => {
+  it('accepts a point with or without the session it came from', () => {
+    expect(metricPointSchema.safeParse({ t: '2026-11-13T10:20:00.000Z', value: 4.4 }).success).toBe(true);
+    expect(metricPointSchema.safeParse({ t: '2026-11-13T10:20:00.000Z', value: 4.4, sessionId: 'sess-1' }).success).toBe(true);
+  });
+
+  it('rejects an empty session id', () => {
+    expect(metricPointSchema.safeParse({ t: '2026-11-13T10:20:00.000Z', value: 4.4, sessionId: '' }).success).toBe(false);
   });
 });

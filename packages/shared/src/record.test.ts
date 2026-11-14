@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { medicalRecordSchema, timelineEventSchema } from './record.ts';
+import { defaultSide, medicalRecordSchema, timelineEventSchema, type Injury } from './record.ts';
 import { attending, levodopaChange, medicalRecord } from './test-fixtures.ts';
 
 describe('timelineEventSchema', () => {
@@ -58,5 +58,14 @@ describe('medicalRecordSchema', () => {
   it('rejects a malformed ICD-10 code', () => {
     const record = { ...medicalRecord, diagnoses: [{ code: 'parkinson', label: "Parkinson's disease" }] };
     expect(medicalRecordSchema.safeParse(record).success).toBe(false);
+  });
+});
+
+describe('defaultSide', () => {
+  it('prefers the injured side, then the first affected limb, then the dominant hand', () => {
+    const injury: Injury = { structure: 'Anterior cruciate ligament', side: 'left', dateOfInjury: '2026-07-04', phaseHistory: [] };
+    expect(defaultSide({ ...medicalRecord, injury })).toBe('left');
+    expect(defaultSide(medicalRecord)).toBe('right');
+    expect(defaultSide({ ...medicalRecord, affectedLimbs: [], dominantHand: 'left' })).toBe('left');
   });
 });

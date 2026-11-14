@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { routes, type SubmitSessionRequest } from '@tempo/shared';
+import { medicationCheckInConfigSchema, routes, type SubmitSessionRequest } from '@tempo/shared';
 import { buildSeed } from '../mock/seed/build.ts';
 import { fingerTappingSubmission } from '../mock/testing.ts';
 import { call, expectError, expectOk, fixedNow, type Harness, type HarnessFactory } from './harness.ts';
@@ -82,6 +82,20 @@ export const sessionFlowSuite = (factory: HarnessFactory): void => {
       expect(h.startedPipelines.filter((id) => id === session.id)).toHaveLength(2);
     });
 
+    it('lists a new session first among the patient’s sessions', async () => {
+      h.setNow(new Date(fixedNow.getTime() + 60_000));
+      try {
+        const { session } = await createSession('pat-2');
+        const listed = expectOk(
+          routes.listPatientSessions,
+          await call(h.app, `/api/patients/${h.id('pat-2')}/sessions`, { token: 'mock-therapist' }),
+        );
+        expect(listed.sessions[0]).toEqual(session);
+      } finally {
+        h.setNow(fixedNow);
+      }
+    });
+
     it('rejects a code that was already used', async () => {
       const { code } = await createSession('pat-3');
       await redeem(code);
@@ -155,6 +169,31 @@ export const sessionFlowSuite = (factory: HarnessFactory): void => {
       const { code } = await createSession('pat-3');
       expectError(await call(h.app, '/api/device/pairing-code', { method: 'POST', body: { code } }), 400, 'code_invalid');
       expect((await redeem(code)).session.patientId).toBe(h.id('pat-3'));
+    });
+  });
+
+  describe('medication check-in', () => {
+    it.each([
+      ['pat-1', [{ medicationId: 'med-2', name: 'Levodopa/Carbidopa' }]],
+      [
+        'pat-2',
+        [
+          { medicationId: 'med-3', name: 'Clopidogrel' },
+          { medicationId: 'med-4', name: 'Atorvastatin' },
+        ],
+      ],
+    ])('hands the device the current medications of %s and keeps the stored plan as it is', async (patientId, medications) => {
+      const created = expectOk(
+        routes.createSession,
+        await call(h.app, `/api/patients/${h.id(patientId)}/sessions`, { method: 'POST', body: { mode: 'kiosk' } }),
+      );
+      const { plan } = await redeem(created.code);
+      const item = plan.items.find((candidate) => candidate.activityId === 'check-in-medication');
+      expect(medicationCheckInConfigSchema.parse(item?.config)).toEqual({ medications });
+
+      const detail = expectOk(routes.getPatient, await call(h.app, `/api/patients/${h.id(patientId)}`));
+      const stored = detail.plan?.items.find((candidate) => candidate.activityId === 'check-in-medication');
+      expect(stored?.config).toEqual({});
     });
   });
 

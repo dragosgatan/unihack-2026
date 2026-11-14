@@ -1,9 +1,11 @@
 import type {
   ActivityResult,
   Baseline,
+  CheckInEntry,
   Flag,
   Institution,
   MedicalRecord,
+  MetricPoint,
   PairedDevice,
   Patient,
   Session,
@@ -15,7 +17,7 @@ import type {
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
 import { keyOfFlag } from './keys.ts';
-import { storedResults, storedSkips, type StoredSkip } from './submission.ts';
+import { storedCheckIns, storedResults, storedSkips, type StoredSkip } from './submission.ts';
 import { newestFirst, withDecision } from './suggestions.ts';
 import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
 
@@ -28,6 +30,8 @@ const flagId = (flag: Flag): string => {
 };
 
 const byTime =<Item extends { t: string }>(a: Item, b: Item): number => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+
+const point = ({ t, value, sessionId }: MetricValue): MetricPoint => ({ t, value, sessionId });
 
 const isOpen = (session: Session): boolean => session.status === 'created' || session.status === 'in-progress';
 
@@ -48,6 +52,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const baselines = new Map<string, Baseline[]>();
   const skips = new Map<string, StoredSkip[]>();
   const flags = new Map<string, Flag>();
+  const checkIns = new Map<string, CheckInEntry>();
   const reports = new Map<string, SessionReport>();
   const painAlerts = new Set<string>();
   const publicData = new Map<string, PublicDataEntry>();
@@ -108,6 +113,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
         const others = (skips.get(key) ?? []).filter((existing) => existing.event.id !== skip.event.id);
         skips.set(key, [...others, skip].sort((a, b) => byTime(a.event, b.event)));
       }
+      for (const entry of storedCheckIns(session, submitted)) checkIns.set(entry.id, entry);
       sessions.set(session.id, { ...current, status: 'submitted', partial, submittedAt });
       return 'submitted';
     },
@@ -145,11 +151,11 @@ export const createMemoryStore = (seed?: Seed): Store => {
 
     listPoints: async (patientId, metricId, side, { from, to }) =>
       (points.get(seriesKey(patientId, metricId, side)) ?? [])
-        .filter((point) => point.t >= from && point.t <= to)
-        .map(({ t, value }) => ({ t, value })),
+        .filter((value) => value.t >= from && value.t <= to)
+        .map(point),
 
     firstPoints: async (patientId, metricId, side, count) =>
-      (points.get(seriesKey(patientId, metricId, side)) ?? []).slice(0, count).map(({ t, value }) => ({ t, value })),
+      (points.get(seriesKey(patientId, metricId, side)) ?? []).slice(0, count).map(point),
 
     latestBaseline: async (patientId, metricId, side) =>
       (baselines.get(seriesKey(patientId, metricId, side)) ?? []).reduce<Baseline | undefined>(
@@ -227,9 +233,9 @@ export const createMemoryStore = (seed?: Seed): Store => {
         ),
 
     previousPoint: async (patientId, metricId, side, before) => {
-      const earlier = (points.get(seriesKey(patientId, metricId, side)) ?? []).filter((point) => point.t < before);
+      const earlier = (points.get(seriesKey(patientId, metricId, side)) ?? []).filter((value) => value.t < before);
       const last = earlier.at(-1);
-      return last && { t: last.t, value: last.value };
+      return last && point(last);
     },
 
     putFlags: async (newFlags) => {
@@ -238,6 +244,14 @@ export const createMemoryStore = (seed?: Seed): Store => {
 
     listFlags: async (patientId, sessionId) =>
       [...flags.values()].filter((flag) => flag.patientId === patientId && flag.sessionId === sessionId),
+
+    listPatientFlags: async (patientId) =>
+      [...flags.values()].filter((flag) => flag.patientId === patientId).sort(newestFirst),
+
+    listCheckIns: async (patientId, { from, to }) =>
+      [...checkIns.values()]
+        .filter((entry) => entry.patientId === patientId && entry.recordedAt >= from && entry.recordedAt <= to)
+        .sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : a.recordedAt > b.recordedAt ? 1 : a.id < b.id ? -1 : 1)),
 
     putReport: async (report) => {
       reports.set(report.sessionId, report);

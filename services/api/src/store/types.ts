@@ -2,6 +2,7 @@ import type {
   ActivityId,
   ActivityResult,
   Baseline,
+  CheckInEntry,
   Flag,
   Institution,
   MedicalRecord,
@@ -95,6 +96,8 @@ export type Store = {
   previousPoint(patientId: string, metricId: MetricId, side: Side | undefined, before: string): Promise<MetricPoint | undefined>;
   putFlags(flags: Flag[]): Promise<void>;
   listFlags(patientId: string, sessionId: string): Promise<Flag[]>;
+  listPatientFlags(patientId: string): Promise<Flag[]>;
+  listCheckIns(patientId: string, range: TimeRange): Promise<CheckInEntry[]>;
   putReport(report: SessionReport): Promise<void>;
   getReport(sessionId: string): Promise<SessionReport | undefined>;
   getPublicData(kind: PublicDataKind, query: string): Promise<PublicDataEntry | undefined>;
