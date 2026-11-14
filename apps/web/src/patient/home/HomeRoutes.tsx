@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Language } from '@tempo/shared';
 import { Route, Routes, useSearchParams } from 'react-router';
 import { DigitEntry } from '../DigitEntry.tsx';
+import { warmPoseAssetsInBackground } from '../pose/assets.ts';
 import { Screen } from '../Screen.tsx';
 import { CodeEntry } from '../session/CodeEntry.tsx';
 import { SessionRunner } from '../session/SessionRunner.tsx';
@@ -151,6 +152,11 @@ export function HomeRoutes() {
     saveDevice(next);
     setDevice(next);
   };
+
+  const paired = device !== undefined;
+  useEffect(() => {
+    if (paired) warmPoseAssetsInBackground();
+  }, [paired]);
 
   const unpair = useCallback(() => {
     forgetDevice();

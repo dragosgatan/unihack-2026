@@ -10,7 +10,7 @@ import { TrailMakingA, TrailMakingB } from './TrailMaking.tsx';
 afterEach(cleanup);
 
 const tapCircles = (labels: string[]) => {
-  for (const label of labels) fireEvent.pointerDown(screen.getByRole('button', { name: label }), { isPrimary: true });
+  for (const label of labels) fireEvent.pointerDown(screen.getByLabelText(label), { isPrimary: true });
 };
 
 const setup = (Module: typeof TrailMakingA, practice: string[]) => {

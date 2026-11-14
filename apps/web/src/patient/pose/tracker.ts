@@ -1,7 +1,5 @@
 import { PoseLandmarker, type Landmark, type NormalizedLandmark } from '@mediapipe/tasks-vision';
-import wasmLoaderPath from '@mediapipe/tasks-vision/vision_wasm_internal.js?url';
-import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url';
-import modelAssetPath from './pose_landmarker_lite.task?url';
+import { modelAssetPath, wasmBinaryUrl, wasmLoaderPath } from './assets.ts';
 
 export type Delegate = 'GPU' | 'CPU';
 

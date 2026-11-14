@@ -20,7 +20,7 @@ const renderHome = (url: string) =>
   );
 
 const typePin = async (pin: string) => {
-  for (const digit of pin) press(digit);
+  for (const digit of pin) press(screen.getByText(digit, { selector: 'button' }));
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 

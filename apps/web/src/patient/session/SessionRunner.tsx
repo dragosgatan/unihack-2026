@@ -4,6 +4,7 @@ import type { Language, SubmittedResult } from '@tempo/shared';
 import { activityModules } from '../activities/index.ts';
 import { Placeholder } from '../activities/placeholder/Placeholder.tsx';
 import { LanguageSwitch } from '../LanguageSwitch.tsx';
+import { warmPoseAssetsInBackground } from '../pose/assets.ts';
 import { Screen } from '../Screen.tsx';
 import { TapButton } from '../TapButton.tsx';
 import { CannotDo } from './CannotDo.tsx';
@@ -93,6 +94,11 @@ export function SessionRunner({ exitTo, onFinish }: SessionRunnerProps) {
   useEffect(() => {
     if (state) saveRunner(state).catch(console.error);
   }, [state]);
+
+  const hasExercise = state?.plan.items.some((item) => item.kind === 'exercise') ?? false;
+  useEffect(() => {
+    if (hasExercise) warmPoseAssetsInBackground();
+  }, [hasExercise]);
 
   if (!loaded) return null;
 
