@@ -9,6 +9,7 @@ import type {
 } from '@tempo/shared';
 import { trailProgress } from '@tempo/shared/scoring';
 import { tapFeedback, useSpoken } from '../../feedback.ts';
+import { HandChoice } from '../../HandChoice.tsx';
 import { Screen } from '../../Screen.tsx';
 import { TapButton } from '../../TapButton.tsx';
 import type { RunnerActivityProps } from '../index.ts';
@@ -60,22 +61,14 @@ function TrailMaking({ part, language, onComplete, onProgress }: Props & { part:
   }
 
   if (phase === 'hand') {
-    const pick = (side: Side) => {
-      setHand(side);
-      setPhase('practice');
-      onProgress({ stage: 'practice', partialData: { hand: side } });
-    };
     return (
-      <Screen
-        title="Which hand will you use?"
-        text="Use the same hand until the end."
+      <HandChoice
         language={language}
-        action={
-          <div className="flex flex-col gap-3">
-            <TapButton onTap={() => pick('right')}>Right hand</TapButton>
-            <TapButton onTap={() => pick('left')}>Left hand</TapButton>
-          </div>
-        }
+        onPick={(side) => {
+          setHand(side);
+          setPhase('practice');
+          onProgress({ stage: 'practice', partialData: { hand: side } });
+        }}
       />
     );
   }

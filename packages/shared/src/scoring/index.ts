@@ -6,6 +6,7 @@ import { scoreTrailMaking } from './trail-making.ts';
 
 export { scoreFingerTapping, tapsPerSecond, intervalVariability, decrement } from './finger-tapping.ts';
 export { scoreTrailMaking, trailProgress } from './trail-making.ts';
+export { clockDrawingFeatures, clockDrawingSvg, clockStrokesPath, type ClockDrawingFeatures } from './clock-drawing.ts';
 export * from './angle.ts';
 export * from './exercises.ts';
 export * from './pose.ts';

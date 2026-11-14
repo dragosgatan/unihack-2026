@@ -98,6 +98,25 @@ export type TrailMakingTarget = z.infer<typeof trailMakingTargetSchema>;
 export type TrailMakingTap = z.infer<typeof trailMakingTapSchema>;
 export type TrailMakingRawResult = z.infer<typeof trailMakingRawResultSchema>;
 
+const unitInterval = z.number().min(0).max(1);
+
+export const clockDrawingPointSchema = z.object({
+  t: z.number().nonnegative(),
+  x: unitInterval,
+  y: unitInterval,
+});
+
+export const clockTimeSchema = z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/);
+
+export const clockDrawingRawResultSchema = z.object({
+  hand: sideSchema,
+  targetTime: clockTimeSchema,
+  strokes: z.array(z.array(clockDrawingPointSchema).min(1)),
+});
+
+export type ClockDrawingPoint = z.infer<typeof clockDrawingPointSchema>;
+export type ClockDrawingRawResult = z.infer<typeof clockDrawingRawResultSchema>;
+
 export const medicationCheckInConfigSchema = z.object({
   medications: z.array(z.object({ medicationId: idSchema, name: z.string().min(1) })),
 });
@@ -111,6 +130,7 @@ export const rawResultSchema = z.discriminatedUnion('activityId', [
   rawResultMember('finger-tapping', fingerTappingRawResultSchema),
   rawResultMember('trail-making-a', trailMakingRawResultSchema),
   rawResultMember('trail-making-b', trailMakingRawResultSchema),
+  rawResultMember('clock-drawing', clockDrawingRawResultSchema),
   rawResultMember('shoulder-raise', shoulderRaiseRawResultSchema),
   rawResultMember('sit-to-stand', sitToStandRawResultSchema),
   rawResultMember('single-leg-squat', singleLegSquatRawResultSchema),

@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { ActivityId, ActivityModuleProps, SessionPlanItem } from '@tempo/shared';
 import type { ActivityProgress } from '../session/runner.ts';
+import { ClockDrawing } from './clock-drawing/ClockDrawing.tsx';
 import { EpisodesCheckIn } from './check-in-episodes/EpisodesCheckIn.tsx';
 import { MedicationCheckIn } from './check-in-medication/MedicationCheckIn.tsx';
 import { PainCheckIn } from './check-in-pain/PainCheckIn.tsx';
@@ -18,6 +19,7 @@ export const activityModules: Partial<
   'finger-tapping': FingerTapping,
   'trail-making-a': TrailMakingA,
   'trail-making-b': TrailMakingB,
+  'clock-drawing': ClockDrawing,
   'shoulder-raise': ShoulderRaise,
   'sit-to-stand': SitToStand,
   'single-leg-squat': SingleLegSquat,
