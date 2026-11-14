@@ -505,10 +505,41 @@ describe('check-in', () => {
     events: [],
   };
 
-  function checkInApi() {
+  const checkInsPath = `/api/patients/${patient.id}/check-ins`;
+  const episodesPath = `/api/patients/${patient.id}/episodes`;
+
+  const checkInEntries = {
+    entries: [
+      {
+        id: 'ci-2',
+        patientId: patient.id,
+        recordedAt: '2026-11-10T09:00:00.000Z',
+        recordedBy: { kind: 'patient' },
+        body: { item: 'medication', medications: [{ medicationId: 'med-1', name: 'Levodopa', status: 'missed', sideEffects: 'Dizzy after lunch' }] },
+      },
+      {
+        id: 'ci-1',
+        patientId: patient.id,
+        recordedAt: '2026-11-10T09:00:00.000Z',
+        recordedBy: { kind: 'patient' },
+        body: { item: 'pain', intensity: 3, location: 'right-shoulder', type: 'burning' },
+      },
+    ],
+  };
+
+  const episodeList = {
+    episodes: [
+      { id: 'ep-2', patientId: patient.id, type: 'freezing', count: 2, occurredAt: '2026-11-08T18:00:00.000Z', description: 'Stuck at the door', source: 'home' },
+      { id: 'ep-1', patientId: patient.id, type: 'fall', count: 1, occurredAt: '2026-11-08T09:00:00.000Z', source: 'check-in' },
+    ],
+  };
+
+  function checkInApi(overrides: Record<string, Handler> = {}) {
     return stubApi({
       [painPath]: () => json(painSeries),
       [tappingPath]: () => json(tapsPerSecondSeries),
+      [checkInsPath]: () => json(checkInEntries),
+      [episodesPath]: () => json(episodeList),
       [`/api/patients/${patient.id}/flags`]: () =>
         json({
           flags: [
@@ -524,6 +555,7 @@ describe('check-in', () => {
             },
           ],
         }),
+      ...overrides,
     });
   }
 
@@ -533,17 +565,43 @@ describe('check-in', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Check-in' })).toBeTruthy();
     expect(await screen.findByRole('heading', { level: 3, name: 'Pain' })).toBeTruthy();
-    expect(screen.getByText('Where pain was reported when an activity was stopped')).toBeTruthy();
+    expect(screen.getByText('Where pain was located, from check-ins and stopped activities')).toBeTruthy();
     expect(screen.getByText('Right shoulder')).toBeTruthy();
-    expect(screen.getByText('1 time')).toBeTruthy();
+    expect(screen.getByText('1 check-in, 1 stopped activity')).toBeTruthy();
+    expect(screen.getByText('Type of pain')).toBeTruthy();
+    expect(screen.getByText('Burning')).toBeTruthy();
     expect(screen.getByText('No medication check-ins yet')).toBeTruthy();
-    expect(screen.getByText('Levodopa/Carbidopa')).toBeTruthy();
-    expect(screen.getByText('No episode check-ins yet')).toBeTruthy();
+    expect(screen.getAllByText('Levodopa/Carbidopa').length).toBeGreaterThan(0);
+    expect(screen.getByRole('group', { name: /Levodopa\/Carbidopa 100\/25 mg · three times daily, 1 missed/ })).toBeTruthy();
+    expect(screen.getByText('Side effects reported')).toBeTruthy();
+    expect(screen.getByText('\u201cDizzy after lunch\u201d')).toBeTruthy();
+    expect(screen.queryByText('No episode check-ins yet')).toBeNull();
     const score = screen.getByRole('combobox', { name: 'Score' });
     expect((score as HTMLSelectElement).value).toBe('finger-tapping.taps-per-second');
     expect(await screen.findByRole('heading', { level: 3, name: tappingName })).toBeTruthy();
     expect(seriesCalls(fetchMock, tappingPath).at(-1)?.get('side')).toBe('right');
     expect(seriesCalls(fetchMock, painPath).at(-1)?.get('range')).toBe('M');
+    expect(seriesCalls(fetchMock, checkInsPath).at(-1)?.get('range')).toBe('M');
+    expect(seriesCalls(fetchMock, episodesPath).at(-1)?.get('range')).toBe('M');
+  });
+
+  it('lists episodes by occurrence with type, source and the patient description', async () => {
+    checkInApi();
+    renderAt(`/clinician/patients/${patient.id}/check-in`);
+    const header = await screen.findByRole('heading', { level: 2, name: 'Days with episodes' });
+    const list = header.closest('section');
+    if (!list) throw new Error('Episode list missing');
+    expect(within(list).getByText('2 freezing (home) · 1 fall (check-in) · \u201cStuck at the door\u201d')).toBeTruthy();
+    expect(within(list).getByText('3 episodes')).toBeTruthy();
+  });
+
+  it('shows a retry inside the cards whose check-in or episode request failed', async () => {
+    const failing = () => json({ error: { code: 'internal', message: 'Down' } }, 500);
+    checkInApi({ [checkInsPath]: failing, [episodesPath]: failing });
+    renderAt(`/clinician/patients/${patient.id}/check-in`);
+    expect(await screen.findByRole('heading', { level: 3, name: 'Pain' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(3);
+    expect(screen.getByRole('combobox', { name: 'Score' })).toBeTruthy();
   });
 
   it('links to the screen from the patient', async () => {

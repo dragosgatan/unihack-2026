@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, ty
 import {
   apiErrorSchema,
   routes,
+  type CheckInItem,
   type MetricId,
   type MetricRange,
   type DeviceListResponse,
@@ -99,6 +100,9 @@ export const queryKeys = {
   patientSessions: (patientId: string) => ['patients', patientId, 'sessions'] as const,
   patientSuggestions: (patientId: string) => ['patients', patientId, 'suggestions'] as const,
   patientDevices: (patientId: string) => ['patients', patientId, 'devices'] as const,
+  patientCheckIns: (patientId: string, range: MetricRange, item: CheckInItem | undefined) =>
+    ['patients', patientId, 'check-ins', range, item ?? null] as const,
+  patientEpisodes: (patientId: string, range: MetricRange) => ['patients', patientId, 'episodes', range] as const,
   metricSeries: (patientId: string, metricId: MetricId, range: MetricRange, side: Side | undefined) =>
     ['patients', patientId, 'metrics', metricId, range, side ?? null] as const,
 };
@@ -166,6 +170,24 @@ export function usePatientSuggestions(patientId: string) {
 
 export function usePatientDevices(patientId: string, refetchInterval: number | false = false) {
   return useApiQuery(queryKeys.patientDevices(patientId), 'listDevices', { params: { patientId } }, { refetchInterval });
+}
+
+export function usePatientCheckIns(patientId: string, range: MetricRange, item?: CheckInItem) {
+  return useApiQuery(
+    queryKeys.patientCheckIns(patientId, range, item),
+    'listPatientCheckIns',
+    { params: { patientId }, query: { range, item } },
+    { placeholderData: keepPreviousData },
+  );
+}
+
+export function usePatientEpisodes(patientId: string, range: MetricRange) {
+  return useApiQuery(
+    queryKeys.patientEpisodes(patientId, range),
+    'listPatientEpisodes',
+    { params: { patientId }, query: { range } },
+    { placeholderData: keepPreviousData },
+  );
 }
 
 export function useCreatePairingCode(patientId: string) {

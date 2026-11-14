@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { MetricRange } from '@tempo/shared';
 import { plotXScale, useContainerWidth, type TimeDomain } from '../ui/index.ts';
-import { cellLabel, episodeCountText, heatFillClasses, heatLevel, type CalendarCell } from './checkIn.ts';
+import { cellDetail, cellLabel, episodeCountText, heatFillClasses, heatLevel, type CalendarCell } from './checkIn.ts';
 import { HeatLegend } from './HeatLegend.tsx';
 
 export interface EpisodeCalendarProps {
@@ -15,11 +15,6 @@ const height = 40;
 const cellTop = 4;
 const cellHeight = 20;
 const markerY = 32;
-
-function cellDetail(cell: CalendarCell, range: MetricRange): string {
-  const parts = [cellLabel(cell, range), episodeCountText(cell.count), ...cell.falls.map((fall) => `Fall: ${fall.label}`)];
-  return parts.join(' · ');
-}
 
 function FallMarker({ x, y }: { x: number; y: number }) {
   return <rect x={x - 3.5} y={y - 3.5} width={7} height={7} rx={1} transform={`rotate(45 ${x} ${y})`} className="fill-critical" />;
@@ -82,8 +77,8 @@ export function EpisodeCalendar({ cells, range, domain }: EpisodeCalendarProps) 
 
   const activeBox = active === null ? undefined : boxes[active];
   const totalEpisodes = cells.reduce((sum, cell) => sum + cell.count, 0);
-  const totalFalls = cells.reduce((sum, cell) => sum + cell.falls.length, 0);
-  const summary = `Episode calendar, one cell per ${unit}, ${episodeCountText(totalEpisodes)}, ${totalFalls === 1 ? '1 fall' : `${totalFalls} falls`}. Use the arrow keys to read each ${unit}.`;
+  const fallCells = cells.filter((cell) => cell.hasFall).length;
+  const summary = `Episode calendar, one cell per ${unit}, ${episodeCountText(totalEpisodes)}, ${fallCells === 1 ? `1 ${unit} with a fall` : `${fallCells} ${unit}s with a fall`}. Use the arrow keys to read each ${unit}.`;
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -106,7 +101,7 @@ export function EpisodeCalendar({ cells, range, domain }: EpisodeCalendarProps) 
             <rect key={box.cell.start} x={box.left} y={cellTop} width={box.width} height={cellHeight} rx={2} className={heatFillClasses[heatLevel(box.cell.count)]} />
           ))}
           {boxes
-            .filter((box) => box.cell.falls.length > 0)
+            .filter((box) => box.cell.hasFall)
             .map((box) => (
               <FallMarker key={`fall-${box.cell.start}`} x={(box.x0 + box.x1) / 2} y={markerY} />
             ))}
@@ -126,7 +121,7 @@ export function EpisodeCalendar({ cells, range, domain }: EpisodeCalendarProps) 
         </svg>
       </div>
       <p aria-live="polite" className="min-h-[1.125rem] break-words text-footnote text-label-secondary">
-        {activeBox ? cellDetail(activeBox.cell, range) : `Tap a ${unit} to see its episodes`}
+        {activeBox ? `${cellLabel(activeBox.cell, range)} · ${cellDetail(activeBox.cell)}` : `Tap a ${unit} to see its episodes`}
       </p>
       <HeatLegend>
         <li className="flex items-center gap-1">

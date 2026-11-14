@@ -5,6 +5,8 @@ import {
   metricDefinitions,
   metricIdSchema,
   metricRangeSchema,
+  type CheckInEntry,
+  type Episode,
   type Flag,
   type MedicalRecord,
   type MetricId,
@@ -13,9 +15,18 @@ import {
   type PatientMetric,
 } from '@tempo/shared';
 import { Card, GroupedList, GroupedListRow, LargeTitle, MetricChart, MetricRangeControl, Select, type TimeDomain } from '../ui/index.ts';
-import { useMetricSeriesList, usePatient, usePatientFlags, usePatientMetrics, type SeriesRequest } from './api.ts';
+import {
+  useMetricSeriesList,
+  usePatient,
+  usePatientCheckIns,
+  usePatientEpisodes,
+  usePatientFlags,
+  usePatientMetrics,
+  type SeriesRequest,
+} from './api.ts';
 import { BodyMapHeat } from './BodyMapHeat.tsx';
 import {
+  cellDetail,
   cellLabel,
   cellsWithEpisodes,
   checkInMetricIds,
@@ -24,14 +35,21 @@ import {
   defaultCompareMetric,
   episodeCalendar,
   episodeCountText,
+  isSingleDrugAdherence,
   lastCheckIn,
   medicationChanges,
+  medicationRows,
   painRegionCounts,
+  painTypeTally,
+  quoted,
+  sideEffectReports,
   sharedDomain,
   type CheckInMetricId,
 } from './checkIn.ts';
+import { painTypeLabels } from './checkInLabels.ts';
 import { EpisodeCalendar } from './EpisodeCalendar.tsx';
 import { formatDate, formatNumber, formatUnit } from './format.ts';
+import { MedicationStrip } from './MedicationStrip.tsx';
 import { metricNames } from './metricNames.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
 
@@ -53,8 +71,16 @@ interface ChartProps {
   domain: TimeDomain;
 }
 
-function PainCard({ series, range, domain, flags }: ChartProps & { flags: readonly Flag[] }) {
-  const counts = useMemo(() => painRegionCounts(flags, domain), [flags, domain]);
+interface Loadable<T> {
+  data: T | undefined;
+  isError: boolean;
+  onRetry: () => void;
+}
+
+function PainCard({ series, range, domain, flags, entries }: ChartProps & { flags: readonly Flag[]; entries: Loadable<readonly CheckInEntry[]> }) {
+  const loaded = entries.data;
+  const counts = useMemo(() => (loaded ? painRegionCounts(loaded, flags, domain) : []), [loaded, flags, domain]);
+  const types = useMemo(() => (loaded ? painTypeTally(loaded, domain) : []), [loaded, domain]);
   return (
     <Card>
       {series ? (
@@ -65,25 +91,82 @@ function PainCard({ series, range, domain, flags }: ChartProps & { flags: readon
           <Missing>No pain check-ins yet</Missing>
         </>
       )}
-      <div className="mt-4 border-t border-separator pt-4">
-        <BodyMapHeat
-          counts={counts}
-          caption="Where pain was reported when an activity was stopped"
-          emptyText="No activity was stopped for pain with a location in this range."
-        />
+      <div className="mt-4 flex flex-col gap-4 border-t border-separator pt-4">
+        {entries.isError ? (
+          <LoadError onRetry={entries.onRetry} />
+        ) : (
+          <>
+            <BodyMapHeat
+              counts={counts}
+              caption="Where pain was located, from check-ins and stopped activities"
+              emptyText="No pain location reported in this range."
+            />
+            {types.length > 0 && (
+              <div>
+                <SubHeading>Type of pain</SubHeading>
+                <ul className="mt-1 flex flex-col">
+                  {types.map((entry) => (
+                    <li key={entry.type} className="flex min-h-11 items-center justify-between gap-3 border-b border-separator py-2 last:border-b-0">
+                      <span className="min-w-0 break-words text-body">{painTypeLabels[entry.type]}</span>
+                      <span className="shrink-0 text-subhead tabular-nums text-label-secondary">
+                        {entry.count === 1 ? '1 check-in' : `${entry.count} check-ins`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </Card>
   );
 }
 
-function MedicationCard({ series, range, domain, record }: ChartProps & { record: MedicalRecord }) {
+function PerMedication({ series, domain, record, entries }: Omit<ChartProps, 'range'> & { record: MedicalRecord; entries: readonly CheckInEntry[] }) {
+  const rows = useMemo(() => medicationRows(entries, record.medications, domain), [entries, record.medications, domain]);
+  const reports = sideEffectReports(rows);
+  if (rows.length === 0) {
+    return series && series.points.length > 0 ? <Missing>No per-medication check-ins in this range</Missing> : null;
+  }
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <SubHeading>Each check-in by medication</SubHeading>
+        <MedicationStrip key={`${domain.start}-${domain.end}`} rows={rows} domain={domain} />
+      </div>
+      {reports.length > 0 && (
+        <div>
+          <SubHeading>Side effects reported</SubHeading>
+          <ul className="mt-1 flex flex-col">
+            {reports.map((report) => (
+              <li key={report.key} className="flex min-h-11 min-w-0 flex-col justify-center border-b border-separator py-2 last:border-b-0">
+                <span className="break-words text-body">{quoted(report.text)}</span>
+                <span className="break-words text-footnote text-label-secondary">
+                  Reported {formatDate(report.t)} · {report.drug}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+function MedicationCard({ series, range, domain, record, entries }: ChartProps & { record: MedicalRecord; entries: Loadable<readonly CheckInEntry[]> }) {
   const [today] = useState(() => new Date());
   const current = currentMedications(record.medications, today);
   const changes = medicationChanges(record.timeline, domain);
+  const allOrNothing = series !== undefined && series.points.every((point) => point.value === 0 || point.value === 100);
+  const singleDrug = allOrNothing && entries.data !== undefined && isSingleDrugAdherence(entries.data, domain);
   return (
     <Card>
       {series ? (
-        <MetricChart series={withDisplayUnit(series)} range={range} domain={domain} title="Medication adherence" formatValue={formatNumber} />
+        <>
+          <MetricChart series={withDisplayUnit(series)} range={range} domain={domain} title="Medication adherence" formatValue={formatNumber} />
+          {singleDrug && <p className="mt-2 text-footnote text-label-secondary">With one medication, each check-in is 0% or 100%.</p>}
+        </>
       ) : (
         <>
           <h3 className="text-subhead font-semibold text-label">Medication adherence</h3>
@@ -91,6 +174,11 @@ function MedicationCard({ series, range, domain, record }: ChartProps & { record
         </>
       )}
       <div className="mt-4 flex flex-col gap-4 border-t border-separator pt-4">
+        {entries.isError ? (
+          <LoadError onRetry={entries.onRetry} />
+        ) : (
+          entries.data && <PerMedication series={series} domain={domain} record={record} entries={entries.data} />
+        )}
         <div>
           <SubHeading>Current medications</SubHeading>
           {current.length === 0 ? (
@@ -128,15 +216,28 @@ function MedicationCard({ series, range, domain, record }: ChartProps & { record
   );
 }
 
-function EpisodesSection({ series, range, domain, record, metrics }: ChartProps & { record: MedicalRecord; metrics: readonly PatientMetric[] }) {
-  const cells = useMemo(() => episodeCalendar(range, domain, series?.points ?? [], record.timeline), [range, domain, series, record.timeline]);
+function EpisodesSection({
+  range,
+  domain,
+  record,
+  metrics,
+  episodes,
+}: Omit<ChartProps, 'series'> & { record: MedicalRecord; metrics: readonly PatientMetric[]; episodes: Loadable<readonly Episode[]> }) {
+  const loaded = episodes.data;
+  const cells = useMemo(() => episodeCalendar(range, domain, loaded ?? [], record.timeline), [range, domain, loaded, record.timeline]);
   const withEpisodes = cellsWithEpisodes(cells);
   const lastT = lastCheckIn(metrics);
   const unitHeader = range === 'W' || range === 'M' ? 'Days with episodes' : 'Weeks with episodes';
+  if (episodes.isError) {
+    return (
+      <Card title="Episodes">
+        <LoadError onRetry={episodes.onRetry} />
+      </Card>
+    );
+  }
   return (
     <>
       <Card title="Episodes">
-        {!series && <Missing>No episode check-ins yet</Missing>}
         <EpisodeCalendar key={range} cells={cells} range={range} domain={domain} />
         {withEpisodes.length === 0 && (
           <p className="mt-3 text-subhead text-label-secondary">
@@ -150,7 +251,7 @@ function EpisodesSection({ series, range, domain, record, metrics }: ChartProps 
             <GroupedListRow
               key={cell.start}
               title={cellLabel(cell, range)}
-              subtitle={cell.falls.length > 0 ? cell.falls.map((fall) => `Fall: ${fall.label}`).join(' · ') : undefined}
+              subtitle={cellDetail(cell)}
               value={cell.count > 0 ? <span className="tabular-nums">{episodeCountText(cell.count)}</span> : undefined}
             />
           ))}
@@ -227,12 +328,18 @@ function CheckInContent({ patientId, record, metrics, range, score, onRangeChang
   );
   const results = useMetricSeriesList(patientId, requests, range);
   const flags = usePatientFlags(patientId);
+  const checkIns = usePatientCheckIns(patientId, range);
+  const episodes = usePatientEpisodes(patientId, range);
 
   const loaded = results.flatMap((result) => (result.data ? [result.data] : []));
-  const computed = sharedDomain(range, loaded, now);
+  const entryTimes = [
+    ...(checkIns.data?.entries.map((entry) => entry.recordedAt) ?? []),
+    ...(episodes.data?.episodes.map((episode) => episode.occurredAt) ?? []),
+  ];
+  const computed = sharedDomain(range, loaded, now, entryTimes);
   const domain = useMemo((): TimeDomain => ({ start: computed.start, end: computed.end }), [computed.start, computed.end]);
 
-  const checkInPending = results.slice(0, present.length).some((result) => result.isPending);
+  const pending = results.slice(0, present.length).some((result) => result.isPending) || flags.isPending || checkIns.isPending || episodes.isPending;
   const failed = results.filter((result) => result.isError);
 
   const seriesFor = (metricId: CheckInMetricId): MetricSeries | undefined => {
@@ -240,11 +347,16 @@ function CheckInContent({ patientId, record, metrics, range, score, onRangeChang
     return index === -1 ? undefined : results[index]?.data;
   };
   const compareSeries = selected === null ? undefined : results[present.length]?.data;
+  const entries: Loadable<readonly CheckInEntry[]> = {
+    data: checkIns.data?.entries,
+    isError: checkIns.isError,
+    onRetry: () => void checkIns.refetch(),
+  };
 
   return (
     <>
       <MetricRangeControl value={range} onChange={onRangeChange} />
-      {checkInPending || flags.isPending ? (
+      {pending ? (
         <LoadingSkeleton rows={3} />
       ) : failed.length > 0 || flags.isError ? (
         <LoadError
@@ -255,9 +367,15 @@ function CheckInContent({ patientId, record, metrics, range, score, onRangeChang
         />
       ) : (
         <>
-          <PainCard series={seriesFor('pain.intensity')} range={range} domain={domain} flags={flags.data.flags} />
-          <MedicationCard series={seriesFor('medication.adherence')} range={range} domain={domain} record={record} />
-          <EpisodesSection series={seriesFor('episodes.count')} range={range} domain={domain} record={record} metrics={metrics} />
+          <PainCard series={seriesFor('pain.intensity')} range={range} domain={domain} flags={flags.data.flags} entries={entries} />
+          <MedicationCard series={seriesFor('medication.adherence')} range={range} domain={domain} record={record} entries={entries} />
+          <EpisodesSection
+            range={range}
+            domain={domain}
+            record={record}
+            metrics={metrics}
+            episodes={{ data: episodes.data?.episodes, isError: episodes.isError, onRetry: () => void episodes.refetch() }}
+          />
           <CompareCard series={compareSeries} range={range} domain={domain} candidates={candidates} selected={selected} onSelect={onScoreChange} />
         </>
       )}

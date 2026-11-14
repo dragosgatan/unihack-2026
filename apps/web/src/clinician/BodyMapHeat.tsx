@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { bodyRegionLabels, type BodyRegion } from '@tempo/shared';
-import { heatFillClasses, heatLevel, type RegionCount } from './checkIn.ts';
+import { heatFillClasses, heatLevel, regionCountText, regionTotal, type RegionCount } from './checkIn.ts';
 import { HeatLegend } from './HeatLegend.tsx';
 
 export interface BodyMapHeatProps {
@@ -32,17 +32,13 @@ const regionShapes: Record<BodyRegion, ReactNode> = {
 
 const bodyRegionOrder = Object.keys(regionShapes) as BodyRegion[];
 
-function countText(count: number): string {
-  return count === 1 ? '1 time' : `${count} times`;
-}
-
 export function BodyMapHeat({ counts, caption, emptyText }: BodyMapHeatProps) {
-  const countOf = new Map(counts.map((entry) => [entry.region, entry.count]));
+  const countOf = new Map(counts.map((entry) => [entry.region, regionTotal(entry)]));
   const labels = bodyRegionLabels.en;
   const summary =
     counts.length === 0
       ? `Body map, ${emptyText}`
-      : `Body map, ${counts.map((entry) => `${labels[entry.region]} ${countText(entry.count)}`).join(', ')}`;
+      : `Body map, ${counts.map((entry) => `${labels[entry.region]} ${regionCountText(entry)}`).join(', ')}`;
 
   return (
     <figure className="flex min-w-0 flex-col gap-3">
@@ -83,7 +79,7 @@ export function BodyMapHeat({ counts, caption, emptyText }: BodyMapHeatProps) {
             {counts.map((entry) => (
               <li key={entry.region} className="flex min-h-11 items-center justify-between gap-3 border-b border-separator py-2 last:border-b-0">
                 <span className="min-w-0 break-words text-body">{labels[entry.region]}</span>
-                <span className="shrink-0 text-subhead tabular-nums text-label-secondary">{countText(entry.count)}</span>
+                <span className="text-right text-subhead tabular-nums text-label-secondary">{regionCountText(entry)}</span>
               </li>
             ))}
           </ul>
