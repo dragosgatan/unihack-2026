@@ -14,3 +14,6 @@ export { Toggle, type ToggleProps } from './Toggle.tsx';
 export { MetricChart, type MetricChartProps } from './chart/MetricChart.tsx';
 export { MiniChart, type MiniChartProps } from './chart/MiniChart.tsx';
 export { MetricRangeControl, type MetricRangeControlProps } from './chart/MetricRangeControl.tsx';
+export { inDomain, latestTime, timeDomain, type TimeDomain } from './chart/scale.ts';
+export { edgeInset, plotXScale, yLabelGutter, type PlotXScale } from './chart/plotScale.ts';
+export { useContainerWidth } from './chart/useContainerWidth.ts';

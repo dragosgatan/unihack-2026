@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router';
 import type { AffectedLimb, MedicalRecord, PatientDetailResponse, PatientMetric } from '@tempo/shared';
 import { Card, EmptyState, LargeTitle, MiniChart } from '../ui/index.ts';
-import { usePatient, usePatientMetrics } from './api.ts';
+import { useMetricSeries, usePatient, usePatientMetrics } from './api.ts';
+import { isCheckInMetric } from './checkIn.ts';
 import { Highlights } from './Highlights.tsx';
 import { ageFrom, formatNumber, formatShortDate, formatUnit, profileLabels, sexLabels } from './format.ts';
 import { metricNames } from './metricNames.ts';
@@ -133,6 +134,49 @@ function LimbSymmetry({ patientId, record }: { patientId: string; record: Medica
   return <LimbSymmetryCard patientId={patientId} record={record} metrics={metrics.data.metrics} />;
 }
 
+function PainMiniChart({ patientId }: { patientId: string }) {
+  const series = useMetricSeries(patientId, 'pain.intensity', 'M');
+  const [now] = useState(() => Date.now());
+  if (!series.data) return null;
+  return <MiniChart series={series.data} now={now} className="mt-3" />;
+}
+
+function CheckInValue({ label, metric, unit }: { label: string; metric: PatientMetric | undefined; unit: string }) {
+  if (metric?.lastValue === undefined) return null;
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className="text-footnote text-label-secondary">{label}</span>
+      <span className="flex flex-wrap items-baseline gap-x-1">
+        <span className="text-title-2 font-semibold tabular-nums">{formatNumber(metric.lastValue)}</span>
+        <span className="text-subhead text-label-secondary">{unit}</span>
+      </span>
+      {metric.lastT !== undefined && <span className="text-footnote text-label-secondary">{formatShortDate(metric.lastT)}</span>}
+    </div>
+  );
+}
+
+function CheckInSection({ patientId }: { patientId: string }) {
+  const metrics = usePatientMetrics(patientId);
+  if (!metrics.isSuccess) return null;
+  const checkIn = metrics.data.metrics.filter((metric) => isCheckInMetric(metric.metricId));
+  if (checkIn.length === 0) return null;
+  const pain = checkIn.find((metric) => metric.metricId === 'pain.intensity');
+  const adherence = checkIn.find((metric) => metric.metricId === 'medication.adherence');
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-title-3 font-semibold">Check-in</h2>
+      <Card href={`/clinician/patients/${patientId}/check-in`} className="max-w-3xl">
+        <div className="grid grid-cols-2 gap-4">
+          <CheckInValue label="Latest pain" metric={pain} unit={formatUnit(pain?.unit ?? '')} />
+          <CheckInValue label="Latest adherence" metric={adherence} unit={formatUnit(adherence?.unit ?? '')} />
+        </div>
+        <p className="mt-2 text-subhead text-label-secondary">Pain, medication and episodes on one time axis</p>
+        {pain && <PainMiniChart patientId={patientId} />}
+      </Card>
+    </section>
+  );
+}
+
 function PatientBody({ patientId }: { patientId: string }) {
   const patient = usePatient(patientId);
 
@@ -152,6 +196,7 @@ function PatientBody({ patientId }: { patientId: string }) {
               <PinnedMetrics patientId={patientId} />
             </section>
             <LimbSymmetry patientId={patientId} record={patient.data.record} />
+            <CheckInSection patientId={patientId} />
             <Highlights patientId={patientId} record={patient.data.record} />
           </>
         )}

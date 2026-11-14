@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router';
 import { Browse, BrowseDomain, BrowseMetric } from './Browse.tsx';
+import { CheckIn } from './CheckIn.tsx';
 import { MetricDetail } from './MetricDetail.tsx';
 import { PatientScreen } from './PatientScreen.tsx';
 import { Patients } from './Patients.tsx';
@@ -18,6 +19,7 @@ export function ClinicianRoutes() {
         <Route path="patients/:patientId" element={<PatientScreen />} />
         <Route path="patients/:patientId/metrics/:metricId" element={<MetricDetail />} />
         <Route path="patients/:patientId/symmetry" element={<Symmetry />} />
+        <Route path="patients/:patientId/check-in" element={<CheckIn />} />
         <Route path="browse" element={<Browse />} />
         <Route path="browse/:domain" element={<BrowseDomain />} />
         <Route path="browse/:domain/:metricId" element={<BrowseMetric />} />

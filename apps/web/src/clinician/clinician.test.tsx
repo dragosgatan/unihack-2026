@@ -475,6 +475,70 @@ describe('limb symmetry', () => {
   });
 });
 
+describe('check-in', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  const painSeries: MetricSeries = {
+    metricId: 'pain.intensity',
+    unit: '0-10',
+    points: [{ t: '2026-11-10T09:00:00.000Z', value: 3 }],
+    baseline: null,
+    referenceBand: null,
+    events: [],
+  };
+
+  function checkInApi() {
+    return stubApi({
+      [painPath]: () => json(painSeries),
+      [tappingPath]: () => json(tapsPerSecondSeries),
+      [`/api/patients/${patient.id}/flags`]: () =>
+        json({
+          flags: [
+            {
+              id: 'flag-1',
+              patientId: patient.id,
+              sessionId: 'sess-1',
+              kind: 'pain-skip',
+              activityId: 'shoulder-raise',
+              stage: 'task',
+              painLocation: 'right-shoulder',
+              createdAt: '2026-11-09T09:00:00.000Z',
+            },
+          ],
+        }),
+    });
+  }
+
+  it('shows pain with the body map, current medications, missing check-ins and a score on the default side', async () => {
+    const fetchMock = checkInApi();
+    renderAt(`/clinician/patients/${patient.id}/check-in`);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Check-in' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Pain' })).toBeTruthy();
+    expect(screen.getByText('Where pain was reported when an activity was stopped')).toBeTruthy();
+    expect(screen.getByText('Right shoulder')).toBeTruthy();
+    expect(screen.getByText('1 time')).toBeTruthy();
+    expect(screen.getByText('No medication check-ins yet')).toBeTruthy();
+    expect(screen.getByText('Levodopa/Carbidopa')).toBeTruthy();
+    expect(screen.getByText('No episode check-ins yet')).toBeTruthy();
+    const score = screen.getByRole('combobox', { name: 'Score' });
+    expect((score as HTMLSelectElement).value).toBe('finger-tapping.taps-per-second');
+    expect(await screen.findByRole('heading', { level: 3, name: tappingName })).toBeTruthy();
+    expect(seriesCalls(fetchMock, tappingPath).at(-1)?.get('side')).toBe('right');
+    expect(seriesCalls(fetchMock, painPath).at(-1)?.get('range')).toBe('M');
+  });
+
+  it('links to the screen from the patient', async () => {
+    checkInApi();
+    renderAt(`/clinician/patients/${patient.id}`);
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Check-in' })).closest('section');
+    if (!section) throw new Error('Check-in section missing');
+    expect(within(section).getByRole('link').getAttribute('href')).toBe(`/clinician/patients/${patient.id}/check-in`);
+  });
+});
+
 describe('metric maps', () => {
   it('describes every activity behind a metric', () => {
     for (const metricId of metricIds) {

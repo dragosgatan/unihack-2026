@@ -60,6 +60,7 @@ export const queryKeys = {
   patients: ['patients'] as const,
   patient: (patientId: string) => ['patients', patientId] as const,
   patientMetrics: (patientId: string) => ['patients', patientId, 'metrics'] as const,
+  patientFlags: (patientId: string) => ['patients', patientId, 'flags'] as const,
   metricSeries: (patientId: string, metricId: MetricId, range: MetricRange, side: Side | undefined) =>
     ['patients', patientId, 'metrics', metricId, range, side ?? null] as const,
 };
@@ -102,6 +103,10 @@ export function usePatient(patientId: string) {
 
 export function usePatientMetrics(patientId: string) {
   return useApiQuery(queryKeys.patientMetrics(patientId), 'listPatientMetrics', { params: { patientId } });
+}
+
+export function usePatientFlags(patientId: string) {
+  return useApiQuery(queryKeys.patientFlags(patientId), 'listPatientFlags', { params: { patientId } });
 }
 
 export function useMetricSeries(patientId: string, metricId: MetricId, range: MetricRange, side?: Side) {

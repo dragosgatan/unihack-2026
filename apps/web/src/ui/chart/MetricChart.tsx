@@ -13,6 +13,7 @@ import {
   timeTicks,
   type TimeDomain,
 } from './scale.ts';
+import { edgeInset, plotXScale } from './plotScale.ts';
 import { useContainerWidth } from './useContainerWidth.ts';
 
 export interface MetricChartProps {
@@ -25,6 +26,7 @@ export interface MetricChartProps {
   label?: string;
   compare?: { series: MetricSeries; label: string };
   target?: { value: number; label: string };
+  domain?: TimeDomain;
 }
 
 interface PlotPoint {
@@ -102,10 +104,8 @@ interface GeometryInput {
 }
 
 const fallbackWidth = 320;
-const yLabelGutter = 40;
 const plotTop = 12;
 const axisGutter = 28;
-const edgeInset = 6;
 const eventSnapPx = 12;
 const minDotSpacingPx = 8;
 const endLabelGapPx = 18;
@@ -198,9 +198,8 @@ function endLabels(primary: PlotLine, compare: PlotLine, labels: [string, string
 }
 
 function buildGeometry({ series, compare, label, target, range, domain, width, height }: GeometryInput): Geometry {
-  const plotRight = width - yLabelGutter;
+  const { x, plotRight } = plotXScale(width, domain);
   const plotBottom = height - axisGutter;
-  const x = linearScale([domain.start, domain.end], [edgeInset, plotRight - edgeInset]);
 
   const visible = visiblePoints(series, domain);
   const visibleCompare = compare ? visiblePoints(compare.series, domain) : [];
@@ -389,6 +388,7 @@ export function MetricChart({
   label = 'Value',
   compare,
   target,
+  domain: sharedDomain,
 }: MetricChartProps) {
   const [containerRef, width] = useContainerWidth(fallbackWidth);
   const [now] = useState(() => Date.now());
@@ -397,9 +397,10 @@ export function MetricChart({
   const comparing = compare !== undefined;
 
   const domain = useMemo(() => {
+    if (sharedDomain) return sharedDomain;
     const times = [...series.points, ...series.events, ...(compareSeries?.points ?? [])].map((entry) => Date.parse(entry.t));
     return timeDomain(range, latestTime(times, now));
-  }, [series, compareSeries, range, now]);
+  }, [sharedDomain, series, compareSeries, range, now]);
 
   const targetValue = target?.value;
   const targetLabel = target?.label;

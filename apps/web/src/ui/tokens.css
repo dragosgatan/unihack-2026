@@ -42,6 +42,11 @@
   --ui-chart-primary: #077296;
   --ui-chart-compare: #d4620f;
 
+  --ui-heat-1: #6db8d2;
+  --ui-heat-2: #3593b6;
+  --ui-heat-3: #077296;
+  --ui-heat-4: #034a63;
+
   --ui-bar: rgb(249 249 249 / 0.78);
   --ui-bar-solid: #f9f9f9;
 
@@ -87,6 +92,11 @@
 
     --ui-chart-primary: #2a9fc0;
     --ui-chart-compare: #d9772e;
+
+    --ui-heat-1: #1f6a83;
+    --ui-heat-2: #2a8bab;
+    --ui-heat-3: #4fc3e0;
+    --ui-heat-4: #a6e6f5;
 
     --ui-bar: rgb(28 28 30 / 0.78);
     --ui-bar-solid: #1c1c1e;
@@ -135,6 +145,11 @@
 
   --color-chart-primary: var(--ui-chart-primary);
   --color-chart-compare: var(--ui-chart-compare);
+
+  --color-heat-1: var(--ui-heat-1);
+  --color-heat-2: var(--ui-heat-2);
+  --color-heat-3: var(--ui-heat-3);
+  --color-heat-4: var(--ui-heat-4);
 
   --color-bar: var(--ui-bar);
   --color-bar-solid: var(--ui-bar-solid);

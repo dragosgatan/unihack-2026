@@ -34,6 +34,13 @@ describe('MetricChart', () => {
     expect(screen.getByRole('group', { name: 'Tapping speed, 4 sessions, average 4.3 taps/s' })).toBeTruthy();
   });
 
+  it('uses a given domain instead of its own', () => {
+    const october = { start: new Date(2026, 9, 1).getTime(), end: new Date(2026, 10, 1).getTime() };
+    render(<MetricChart series={series} range="M" title="Tapping speed" domain={october} />);
+    expect(screen.getByRole('group', { name: 'Tapping speed, no sessions in this range' })).toBeTruthy();
+    expect(screen.getByText('No data in this range')).toBeTruthy();
+  });
+
   it('labels the reference band as the own range', () => {
     render(<MetricChart series={series} range="M" title="Tapping speed" />);
     expect(screen.getByText('own range')).toBeTruthy();
