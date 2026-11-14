@@ -75,6 +75,29 @@ export type FingerTappingTap = z.infer<typeof fingerTappingTapSchema>;
 export type FingerTappingTrial = z.infer<typeof fingerTappingTrialSchema>;
 export type FingerTappingRawResult = z.infer<typeof fingerTappingRawResultSchema>;
 
+export const trailMakingTargetSchema = z.object({
+  label: z.string().min(1),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+export const trailMakingTapSchema = z.object({
+  t: z.number().nonnegative(),
+  target: z.number().int().nonnegative(),
+});
+
+export const trailMakingRawResultSchema = z
+  .object({
+    hand: sideSchema,
+    targets: z.array(trailMakingTargetSchema).min(2),
+    taps: z.array(trailMakingTapSchema),
+  })
+  .refine((raw) => raw.taps.every((tap) => tap.target < raw.targets.length), 'A tap points at a target that does not exist');
+
+export type TrailMakingTarget = z.infer<typeof trailMakingTargetSchema>;
+export type TrailMakingTap = z.infer<typeof trailMakingTapSchema>;
+export type TrailMakingRawResult = z.infer<typeof trailMakingRawResultSchema>;
+
 export const medicationCheckInConfigSchema = z.object({
   medications: z.array(z.object({ medicationId: idSchema, name: z.string().min(1) })),
 });
@@ -86,6 +109,8 @@ const rawResultMember = <Id extends ActivityId, Data extends z.ZodType>(activity
 
 export const rawResultSchema = z.discriminatedUnion('activityId', [
   rawResultMember('finger-tapping', fingerTappingRawResultSchema),
+  rawResultMember('trail-making-a', trailMakingRawResultSchema),
+  rawResultMember('trail-making-b', trailMakingRawResultSchema),
   rawResultMember('shoulder-raise', shoulderRaiseRawResultSchema),
   rawResultMember('sit-to-stand', sitToStandRawResultSchema),
   rawResultMember('single-leg-squat', singleLegSquatRawResultSchema),
