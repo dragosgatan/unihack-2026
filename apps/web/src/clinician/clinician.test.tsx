@@ -14,6 +14,7 @@ import {
   type PatientMetricsResponse,
   type PatientSessionListResponse,
   type SkipEvent,
+  type Suggestion,
 } from '@tempo/shared';
 import { attending, medicalRecord, patient, session, tapsPerSecondSeries } from '../../../../packages/shared/src/test-fixtures.ts';
 import { routes } from '../routes.tsx';
@@ -67,6 +68,7 @@ function stubApi(overrides: Record<string, Handler> = {}) {
     '/api/patients': () => json(patientList),
     [`/api/patients/${patient.id}`]: () => json(patientDetail),
     [`/api/patients/${patient.id}/metrics`]: () => json(patientMetrics),
+    [`/api/patients/${patient.id}/suggestions`]: () => json({ suggestions: [] }),
     ...overrides,
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -694,6 +696,147 @@ describe('sessions', () => {
     await screen.findByRole('heading', { level: 2, name: 'Sessions' });
     const skippedRow = within(sessionsSection()).getByRole('link', { name: /Skipped/ });
     expect(skippedRow.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/sessions/sess-0`);
+  });
+});
+
+const suggestionsPath = `/api/patients/${patient.id}/suggestions`;
+const decisionPath = `${suggestionsPath}/sugg-1/decision`;
+
+const proposed: Suggestion = {
+  id: 'sugg-1',
+  patientId: patient.id,
+  kind: 'review',
+  text: 'Trail Making A time was higher than baseline after the dose change — consider review.',
+  evidence: [
+    { metricId: 'trail-making-a.time', sessionId: 'ses-9', t: '2026-11-02T09:00:00.000Z', label: 'trail-making-a.time: 61 s, baseline 48 s' },
+    { t: '2026-10-28T00:00:00.000Z', label: 'Levodopa/Carbidopa dose changed' },
+    { label: 'Drug label lists confusion', sourceUrl: 'https://example.org/label' },
+  ],
+  status: 'proposed',
+  createdAt: '2026-11-02T09:05:00.000Z',
+  ai: { model: 'mock', promptVersion: 'suggest-review-1', inputRef: 'suggestion:sugg-1' },
+};
+
+function decided(overrides: Partial<Suggestion>): Suggestion {
+  return { ...proposed, decidedBy: me.id, decidedAt: '2026-11-03T10:00:00.000Z', ...overrides };
+}
+
+function decisionBodies(fetchMock: ReturnType<typeof stubApi>): unknown[] {
+  return fetchMock.mock.calls
+    .filter(([input, init]) => String(input) === decisionPath && init?.method === 'POST')
+    .map(([, init]) => JSON.parse(String(init?.body)));
+}
+
+function suggestionsSection(): HTMLElement {
+  const section = screen.getByRole('heading', { level: 2, name: 'Suggestions' }).closest('section');
+  if (!section) throw new Error('Suggestions section missing');
+  return section;
+}
+
+describe('suggestions', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  it('labels the suggestion as AI-made and links its evidence', async () => {
+    stubApi({ [suggestionsPath]: () => json({ suggestions: [proposed] }) });
+    renderAt(`/clinician/patients/${patient.id}`);
+
+    await screen.findByRole('heading', { level: 2, name: 'Suggestions' });
+    const section = suggestionsSection();
+    expect(within(section).getByText('Suggested by Tempo AI')).toBeTruthy();
+    expect(within(section).getByText('Review')).toBeTruthy();
+    expect(within(section).getByText('Model mock · prompt suggest-review-1')).toBeTruthy();
+    const metricLink = within(section).getByRole('link', { name: /Trail Making A time: 61 s, baseline 48 s/ });
+    expect(metricLink.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/metrics/trail-making-a.time`);
+    const source = within(section).getByRole('link', { name: /Drug label lists confusion/ });
+    expect(source.getAttribute('href')).toBe('https://example.org/label');
+    expect(source.getAttribute('target')).toBe('_blank');
+    expect(source.getAttribute('rel')).toContain('noopener');
+    expect(within(section).queryByRole('link', { name: /Levodopa/ })).toBeNull();
+    expect(within(section).queryByRole('link', { name: 'See past suggestions' })).toBeNull();
+  });
+
+  it('accepts on tap and moves the suggestion to past', async () => {
+    const fetchMock = stubApi({
+      [suggestionsPath]: () => json({ suggestions: [proposed] }),
+      [decisionPath]: () => json({ suggestion: decided({ status: 'accepted' }) }),
+    });
+    renderAt(`/clinician/patients/${patient.id}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
+
+    expect(await screen.findByRole('link', { name: /See past suggestions/ })).toBeTruthy();
+    expect(decisionBodies(fetchMock)).toEqual([{ status: 'accepted' }]);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull());
+  });
+
+  it('saves edited text from the sheet', async () => {
+    const editedText = 'Review the levodopa dose change at the next visit.';
+    const fetchMock = stubApi({
+      [suggestionsPath]: () => json({ suggestions: [proposed] }),
+      [decisionPath]: () => json({ suggestion: decided({ status: 'edited', editedText }) }),
+    });
+    renderAt(`/clinician/patients/${patient.id}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Edit suggestion' });
+    const field = within(sheet).getByLabelText('Suggestion text');
+    expect((field as HTMLTextAreaElement).value).toBe(proposed.text);
+    const save = within(sheet).getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(field, { target: { value: '   ' } });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(field, { target: { value: `  ${editedText}  ` } });
+    fireEvent.click(save);
+
+    expect(await screen.findByRole('link', { name: /See past suggestions/ })).toBeTruthy();
+    expect(decisionBodies(fetchMock)).toEqual([{ status: 'edited', editedText }]);
+  });
+
+  it('shows an error with Try again when dismissing fails, then dismisses on retry', async () => {
+    let calls = 0;
+    const fetchMock = stubApi({
+      [suggestionsPath]: () => json({ suggestions: [proposed] }),
+      [decisionPath]: () =>
+        ++calls === 1 ? json({ error: { code: 'internal', message: 'Boom' } }, 500) : json({ suggestion: decided({ status: 'dismissed' }) }),
+    });
+    renderAt(`/clinician/patients/${patient.id}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain("Couldn't save your decision.");
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+
+    fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByRole('link', { name: /See past suggestions/ })).toBeTruthy();
+    expect(decisionBodies(fetchMock)).toEqual([{ status: 'dismissed' }, { status: 'dismissed' }]);
+  });
+
+  it('hides the section when there are no suggestions', async () => {
+    stubApi();
+    renderAt(`/clinician/patients/${patient.id}`);
+    await screen.findByRole('heading', { level: 2, name: 'Pinned' });
+    expect(screen.queryByRole('heading', { level: 2, name: 'Suggestions' })).toBeNull();
+  });
+
+  it('lists past suggestions newest first with outcome and the original of an edit', async () => {
+    const edited = decided({ id: 'sugg-2', status: 'edited', editedText: 'Clinician wording.', createdAt: '2026-11-05T09:00:00.000Z' });
+    const dismissed = decided({ id: 'sugg-3', status: 'dismissed', createdAt: '2026-10-01T09:00:00.000Z' });
+    stubApi({ [suggestionsPath]: () => json({ suggestions: [dismissed, proposed, edited] }) });
+    renderAt(`/clinician/patients/${patient.id}/suggestions`);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Suggestions' })).toBeTruthy();
+    const cards = await screen.findAllByRole('article');
+    expect(cards.map((card) => within(card).getByText(/^(Open|Accepted|Edited|Dismissed)$/).textContent)).toEqual(['Edited', 'Open', 'Dismissed']);
+    const [editedCard] = cards;
+    if (!editedCard) throw new Error('Edited card missing');
+    expect(within(editedCard).getByText('Clinician wording.')).toBeTruthy();
+    expect(within(editedCard).getByText('Original from Tempo AI')).toBeTruthy();
+    expect(within(editedCard).getByText(proposed.text)).toBeTruthy();
+    expect(screen.getByRole('link', { name: patient.name }).getAttribute('href')).toBe(`/clinician/patients/${patient.id}`);
   });
 });
 

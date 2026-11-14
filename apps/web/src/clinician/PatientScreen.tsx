@@ -10,6 +10,7 @@ import { metricNames } from './metricNames.ts';
 import { SessionListRow } from './SessionListRow.tsx';
 import { sessionsWithSkips } from './sessionSummary.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
+import { Suggestions } from './Suggestions.tsx';
 import { useSymmetrySeries } from './useSymmetrySeries.ts';
 import { latestPoint } from './symmetry.ts';
 
@@ -221,6 +222,7 @@ function PatientBody({ patientId }: { patientId: string }) {
             <CheckInSection patientId={patientId} />
             <SessionsSection patientId={patientId} />
             <Highlights patientId={patientId} record={patient.data.record} />
+            <Suggestions patientId={patientId} />
           </>
         )}
       </div>

@@ -8,6 +8,7 @@ import { Sessions } from './Sessions.tsx';
 import { Patients } from './Patients.tsx';
 import { ClinicianShell } from './Shell.tsx';
 import { SignIn } from './SignIn.tsx';
+import { SuggestionsHistory } from './SuggestionsHistory.tsx';
 import { Symmetry } from './Symmetry.tsx';
 import { Summary } from './Summary.tsx';
 
@@ -24,6 +25,7 @@ export function ClinicianRoutes() {
         <Route path="patients/:patientId/check-in" element={<CheckIn />} />
         <Route path="patients/:patientId/sessions" element={<Sessions />} />
         <Route path="patients/:patientId/sessions/:sessionId" element={<SessionSummary />} />
+        <Route path="patients/:patientId/suggestions" element={<SuggestionsHistory />} />
         <Route path="browse" element={<Browse />} />
         <Route path="browse/:domain" element={<BrowseDomain />} />
         <Route path="browse/:domain/:metricId" element={<BrowseMetric />} />

@@ -1,5 +1,14 @@
-import { keepPreviousData, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { apiErrorSchema, routes, type MetricId, type MetricRange, type RouteName, type Side } from '@tempo/shared';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import {
+  apiErrorSchema,
+  routes,
+  type MetricId,
+  type MetricRange,
+  type RouteName,
+  type Side,
+  type SuggestionDecisionRequest,
+  type SuggestionListResponse,
+} from '@tempo/shared';
 import { getToken, signOut } from './auth.ts';
 
 type Routes = typeof routes;
@@ -8,12 +17,21 @@ type StaffGetRoute = {
   [N in RouteName]: Routes[N] extends { method: 'GET'; auth: 'staff' } ? N : never;
 }[RouteName];
 
+type StaffPostRoute = {
+  [N in RouteName]: Routes[N] extends { method: 'POST'; auth: 'staff' } ? N : never;
+}[RouteName];
+
 type SchemaOutput<S> = S extends { parse: (data: unknown) => infer O } ? O : never;
 
 export type RouteResponse<N extends StaffGetRoute> = SchemaOutput<Routes[N]['response']>;
 
 export type RouteInput<N extends StaffGetRoute> = (Routes[N] extends { params: infer P } ? { params: SchemaOutput<P> } : { params?: never }) &
   (Routes[N] extends { query: infer Q } ? { query?: SchemaOutput<Q> } : { query?: never });
+
+export type PostResponse<N extends StaffPostRoute> = SchemaOutput<Routes[N]['response']>;
+
+export type PostInput<N extends StaffPostRoute> = (Routes[N] extends { params: infer P } ? { params: SchemaOutput<P> } : { params?: never }) &
+  (Routes[N] extends { body: infer B } ? { body: SchemaOutput<B> } : { body?: never });
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -55,6 +73,22 @@ export async function apiFetch<N extends StaffGetRoute>(name: N, input: RouteInp
   return route.response.parse(await response.json()) as RouteResponse<N>;
 }
 
+export async function apiPost<N extends StaffPostRoute>(name: N, input: PostInput<N>, token: string): Promise<PostResponse<N>> {
+  const route: Routes[StaffPostRoute] = routes[name];
+  const body = 'body' in route ? JSON.stringify(route.body.parse(input.body)) : undefined;
+  const response = await fetch(buildUrl(route.path, input.params, undefined), {
+    method: route.method,
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body,
+  });
+  if (!response.ok) throw await readError(response);
+  return route.response.parse(await response.json()) as PostResponse<N>;
+}
+
 export const queryKeys = {
   me: ['me'] as const,
   patients: ['patients'] as const,
@@ -62,6 +96,7 @@ export const queryKeys = {
   patientMetrics: (patientId: string) => ['patients', patientId, 'metrics'] as const,
   patientFlags: (patientId: string) => ['patients', patientId, 'flags'] as const,
   patientSessions: (patientId: string) => ['patients', patientId, 'sessions'] as const,
+  patientSuggestions: (patientId: string) => ['patients', patientId, 'suggestions'] as const,
   metricSeries: (patientId: string, metricId: MetricId, range: MetricRange, side: Side | undefined) =>
     ['patients', patientId, 'metrics', metricId, range, side ?? null] as const,
 };
@@ -70,15 +105,23 @@ interface ApiQueryOptions {
   placeholderData?: typeof keepPreviousData;
 }
 
-async function fetchSignedIn<N extends StaffGetRoute>(queryClient: QueryClient, name: N, input: RouteInput<N>): Promise<RouteResponse<N>> {
+async function withSignedIn<T>(queryClient: QueryClient, request: (token: string) => Promise<T>): Promise<T> {
   const token = getToken();
   if (token === null) throw new ApiRequestError(401, 'unauthenticated', 'Not signed in');
   try {
-    return await apiFetch(name, input, token);
+    return await request(token);
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 401) signOut(queryClient);
     throw error;
   }
+}
+
+function fetchSignedIn<N extends StaffGetRoute>(queryClient: QueryClient, name: N, input: RouteInput<N>): Promise<RouteResponse<N>> {
+  return withSignedIn(queryClient, (token) => apiFetch(name, input, token));
+}
+
+function postSignedIn<N extends StaffPostRoute>(queryClient: QueryClient, name: N, input: PostInput<N>): Promise<PostResponse<N>> {
+  return withSignedIn(queryClient, (token) => apiPost(name, input, token));
 }
 
 function useApiQuery<N extends StaffGetRoute>(queryKey: readonly unknown[], name: N, input: RouteInput<N>, options: ApiQueryOptions = {}) {
@@ -112,6 +155,28 @@ export function usePatientFlags(patientId: string) {
 
 export function usePatientSessions(patientId: string) {
   return useApiQuery(queryKeys.patientSessions(patientId), 'listPatientSessions', { params: { patientId } });
+}
+
+export function usePatientSuggestions(patientId: string) {
+  return useApiQuery(queryKeys.patientSuggestions(patientId), 'listSuggestions', { params: { patientId } });
+}
+
+export interface SuggestionDecision {
+  suggestionId: string;
+  decision: SuggestionDecisionRequest;
+}
+
+export function useDecideSuggestion(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ suggestionId, decision }: SuggestionDecision) =>
+      postSignedIn(queryClient, 'decideSuggestion', { params: { patientId, suggestionId }, body: decision }),
+    onSuccess: ({ suggestion }) => {
+      queryClient.setQueryData<SuggestionListResponse>(queryKeys.patientSuggestions(patientId), (current) =>
+        current ? { suggestions: current.suggestions.map((existing) => (existing.id === suggestion.id ? suggestion : existing)) } : current,
+      );
+    },
+  });
 }
 
 export function useMetricSeries(patientId: string, metricId: MetricId, range: MetricRange, side?: Side) {

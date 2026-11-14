@@ -111,3 +111,21 @@ export function SkippedIcon() {
     </svg>
   );
 }
+
+export function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11 2.5c.4 4.6 2.9 7.1 7.5 7.5-4.6.4-7.1 2.9-7.5 7.5-.4-4.6-2.9-7.1-7.5-7.5 4.6-.4 7.1-2.9 7.5-7.5Z" />
+      <path d="M18.5 14c.2 2.3 1.2 3.3 3.5 3.5-2.3.2-3.3 1.2-3.5 3.5-.2-2.3-1.2-3.3-3.5-3.5 2.3-.2 3.3-1.2 3.5-3.5Z" />
+    </svg>
+  );
+}
+
+export function ExternalLinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 16 17 7" />
+      <path d="M9 7h8v8" />
+    </svg>
+  );
+}
