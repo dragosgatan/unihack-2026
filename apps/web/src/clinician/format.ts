@@ -31,6 +31,12 @@ export function formatDate(iso: string): string {
   return fullDate.format(new Date(iso));
 }
 
+const dateTime = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+export function formatDateTime(iso: string): string {
+  return dateTime.format(new Date(iso));
+}
+
 const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 
 export function formatNumber(value: number): string {

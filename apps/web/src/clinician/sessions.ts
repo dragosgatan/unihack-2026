@@ -18,11 +18,11 @@ export const skipStageLabels: Record<SkipStage, string> = {
 };
 
 export type SessionRow =
-  | { kind: 'result'; key: string; t: string; value: number }
+  | { kind: 'result'; key: string; t: string; value: number; sessionId: string | undefined }
   | { kind: 'skipped'; key: string; t: string; event: SkipEvent };
 
 export function sessionRows(series: MetricSeries): SessionRow[] {
-  const results = series.points.map((point, index): SessionRow => ({ kind: 'result', key: `point-${index}-${point.t}`, t: point.t, value: point.value }));
+  const results = series.points.map((point, index): SessionRow => ({ kind: 'result', key: `point-${index}-${point.t}`, t: point.t, value: point.value, sessionId: point.sessionId }));
   const skips = series.events.flatMap((event): SessionRow[] => (event.type === 'skip' ? [{ kind: 'skipped', key: event.id, t: event.t, event }] : []));
   return [...results, ...skips].sort((a, b) => Date.parse(b.t) - Date.parse(a.t));
 }

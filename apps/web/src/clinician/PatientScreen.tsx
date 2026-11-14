@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router';
 import type { AffectedLimb, MedicalRecord, PatientDetailResponse, PatientMetric } from '@tempo/shared';
-import { Card, EmptyState, LargeTitle, MiniChart } from '../ui/index.ts';
-import { useMetricSeries, usePatient, usePatientMetrics } from './api.ts';
+import { Card, EmptyState, GroupedList, GroupedListRow, LargeTitle, MiniChart } from '../ui/index.ts';
+import { useMetricSeries, usePatient, usePatientFlags, usePatientMetrics, usePatientSessions } from './api.ts';
 import { isCheckInMetric } from './checkIn.ts';
 import { Highlights } from './Highlights.tsx';
 import { ageFrom, formatNumber, formatShortDate, formatUnit, profileLabels, sexLabels } from './format.ts';
 import { metricNames } from './metricNames.ts';
+import { SessionListRow } from './SessionListRow.tsx';
+import { sessionsWithSkips } from './sessionSummary.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
 import { useSymmetrySeries } from './useSymmetrySeries.ts';
 import { latestPoint } from './symmetry.ts';
@@ -177,6 +179,26 @@ function CheckInSection({ patientId }: { patientId: string }) {
   );
 }
 
+const latestSessionCount = 3;
+
+function SessionsSection({ patientId }: { patientId: string }) {
+  const sessions = usePatientSessions(patientId);
+  const flags = usePatientFlags(patientId);
+  if (!sessions.isSuccess || sessions.data.sessions.length === 0) return null;
+  const skipped = sessionsWithSkips([], flags.data?.flags ?? []);
+  return (
+    <section className="flex max-w-3xl flex-col gap-2">
+      <h2 className="text-title-3 font-semibold">Sessions</h2>
+      <GroupedList>
+        {sessions.data.sessions.slice(0, latestSessionCount).map((session) => (
+          <SessionListRow key={session.id} patientId={patientId} session={session} hasSkips={skipped.has(session.id)} />
+        ))}
+        <GroupedListRow title={<span className="text-accent">See all sessions</span>} chevron href={`/clinician/patients/${patientId}/sessions`} />
+      </GroupedList>
+    </section>
+  );
+}
+
 function PatientBody({ patientId }: { patientId: string }) {
   const patient = usePatient(patientId);
 
@@ -197,6 +219,7 @@ function PatientBody({ patientId }: { patientId: string }) {
             </section>
             <LimbSymmetry patientId={patientId} record={patient.data.record} />
             <CheckInSection patientId={patientId} />
+            <SessionsSection patientId={patientId} />
             <Highlights patientId={patientId} record={patient.data.record} />
           </>
         )}

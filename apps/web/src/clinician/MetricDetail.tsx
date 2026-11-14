@@ -43,9 +43,15 @@ function AboutCard({ metricId }: { metricId: MetricId }) {
   );
 }
 
-function SkippedRow({ row }: { row: Extract<SessionRow, { kind: 'skipped' }> }) {
+function sessionHref(patientId: string, sessionId: string | undefined): string | undefined {
+  return sessionId === undefined ? undefined : `/clinician/patients/${patientId}/sessions/${sessionId}`;
+}
+
+function SkippedRow({ row, patientId }: { row: Extract<SessionRow, { kind: 'skipped' }>; patientId: string }) {
   return (
     <GroupedListRow
+      chevron
+      href={sessionHref(patientId, row.event.sessionId)}
       title={
         <span className="flex items-center gap-2">
           <span className="truncate">{formatDate(row.t)}</span>
@@ -62,19 +68,20 @@ function SkippedRow({ row }: { row: Extract<SessionRow, { kind: 'skipped' }> }) 
   );
 }
 
-function SessionListRow({ row, unit }: { row: SessionRow; unit: string }) {
+function SessionListRow({ row, unit, patientId }: { row: SessionRow; unit: string; patientId: string }) {
   if (row.kind === 'result') {
-    return <GroupedListRow title={formatDate(row.t)} value={<span className="tabular-nums text-label">{withUnit(row.value, unit)}</span>} />;
+    const href = sessionHref(patientId, row.sessionId);
+    return <GroupedListRow title={formatDate(row.t)} value={<span className="tabular-nums text-label">{withUnit(row.value, unit)}</span>} chevron={href !== undefined} href={href} />;
   }
-  return <SkippedRow row={row} />;
+  return <SkippedRow row={row} patientId={patientId} />;
 }
 
 function sideValue(side: Side, value: number | null, unit: string): string {
   return `${sideInitials[side]} ${value === null ? '—' : withUnit(value, unit)}`;
 }
 
-function PairedSessionListRow({ row, unit, firstSide }: { row: PairedSessionRow; unit: string; firstSide: Side }) {
-  if (row.kind === 'skipped') return <SkippedRow row={row} />;
+function PairedSessionListRow({ row, unit, firstSide, patientId }: { row: PairedSessionRow; unit: string; firstSide: Side; patientId: string }) {
+  if (row.kind === 'skipped') return <SkippedRow row={row} patientId={patientId} />;
   const left = firstSide === 'left' ? row.first : row.second;
   const right = firstSide === 'left' ? row.second : row.first;
   return (
@@ -85,20 +92,28 @@ function PairedSessionListRow({ row, unit, firstSide }: { row: PairedSessionRow;
   );
 }
 
-function Sessions({ series }: { series: MetricSeries }) {
+function Sessions({ series, patientId }: { series: MetricSeries; patientId: string }) {
   const rows = sessionRows(series);
   return (
     <GroupedList header="Sessions">
       {rows.length === 0 ? (
         <li className="px-4 py-3 text-subhead text-label-secondary">No sessions in this range</li>
       ) : (
-        rows.map((row) => <SessionListRow key={row.key} row={row} unit={series.unit} />)
+        rows.map((row) => <SessionListRow key={row.key} row={row} unit={series.unit} patientId={patientId} />)
       )}
     </GroupedList>
   );
 }
 
-function SeriesContent({ series, range, metricId, refreshing }: { series: MetricSeries; range: MetricRange; metricId: MetricId; refreshing: boolean }) {
+interface SeriesContentProps {
+  patientId: string;
+  series: MetricSeries;
+  range: MetricRange;
+  metricId: MetricId;
+  refreshing: boolean;
+}
+
+function SeriesContent({ patientId, series, range, metricId, refreshing }: SeriesContentProps) {
   const displaySeries = useMemo(() => ({ ...series, unit: formatUnit(series.unit) }), [series]);
   return (
     <div aria-busy={refreshing} className="flex flex-col gap-6">
@@ -106,7 +121,7 @@ function SeriesContent({ series, range, metricId, refreshing }: { series: Metric
         <MetricChart series={displaySeries} range={range} title={metricNames[metricId]} formatValue={formatNumber} />
       </Card>
       <AboutCard metricId={metricId} />
-      <Sessions series={series} />
+      <Sessions series={series} patientId={patientId} />
     </div>
   );
 }
@@ -170,20 +185,20 @@ function LeftVsRightCard({ pair, metricId }: { pair: SidePair; metricId: MetricI
   );
 }
 
-function PairedSessions({ pair }: { pair: SidePair }) {
+function PairedSessions({ pair, patientId }: { pair: SidePair; patientId: string }) {
   const rows = pairedSessionRows(pair.primary, pair.compare);
   return (
     <GroupedList header="Sessions">
       {rows.length === 0 ? (
         <li className="px-4 py-3 text-subhead text-label-secondary">No sessions in this range</li>
       ) : (
-        rows.map((row) => <PairedSessionListRow key={row.key} row={row} unit={pair.primary.unit} firstSide={pair.primarySide} />)
+        rows.map((row) => <PairedSessionListRow key={row.key} row={row} unit={pair.primary.unit} firstSide={pair.primarySide} patientId={patientId} />)
       )}
     </GroupedList>
   );
 }
 
-function BothSidesContent({ pair, range, metricId }: { pair: SidePair; range: MetricRange; metricId: MetricId }) {
+function BothSidesContent({ pair, range, metricId, patientId }: { pair: SidePair; range: MetricRange; metricId: MetricId; patientId: string }) {
   const primary = useMemo(() => ({ ...pair.primary, unit: formatUnit(pair.primary.unit) }), [pair.primary]);
   const compare = useMemo(() => ({ series: { ...pair.compare, unit: formatUnit(pair.compare.unit) }, label: sideLabel(otherSide(pair.primarySide), pair.affected) }), [pair]);
   return (
@@ -200,7 +215,7 @@ function BothSidesContent({ pair, range, metricId }: { pair: SidePair; range: Me
       </Card>
       <LeftVsRightCard pair={pair} metricId={metricId} />
       <AboutCard metricId={metricId} />
-      <PairedSessions pair={pair} />
+      <PairedSessions pair={pair} patientId={patientId} />
     </div>
   );
 }
@@ -226,7 +241,7 @@ function BothSides({ patientId, metricId, range, record }: { patientId: string; 
       />
     );
   }
-  return <BothSidesContent pair={{ primarySide, primary: primary.data, compare: compare.data, affected: affectedSide(record) }} range={range} metricId={metricId} />;
+  return <BothSidesContent pair={{ primarySide, primary: primary.data, compare: compare.data, affected: affectedSide(record) }} range={range} metricId={metricId} patientId={patientId} />;
 }
 
 function SingleSide({ patientId, metricId, range, side }: { patientId: string; metricId: MetricId; range: MetricRange; side: Side | undefined }) {
@@ -235,7 +250,7 @@ function SingleSide({ patientId, metricId, range, side }: { patientId: string; m
     <>
       {series.isPending && <LoadingSkeleton rows={3} />}
       {series.isError && <LoadError onRetry={() => void series.refetch()} />}
-      {series.isSuccess && <SeriesContent series={series.data} range={range} metricId={metricId} refreshing={series.isPlaceholderData} />}
+      {series.isSuccess && <SeriesContent patientId={patientId} series={series.data} range={range} metricId={metricId} refreshing={series.isPlaceholderData} />}
     </>
   );
 }

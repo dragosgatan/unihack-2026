@@ -2,10 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router';
-import { activityIds, metricDefinitions, metricIds, type MeResponse, type MetricSeries, type PatientDetailResponse, type PatientListResponse, type PatientMetricsResponse } from '@tempo/shared';
-import { attending, medicalRecord, patient, tapsPerSecondSeries } from '../../../../packages/shared/src/test-fixtures.ts';
+import {
+  activityIds,
+  metricDefinitions,
+  metricIds,
+  type Flag,
+  type MeResponse,
+  type MetricSeries,
+  type PatientDetailResponse,
+  type PatientListResponse,
+  type PatientMetricsResponse,
+  type PatientSessionListResponse,
+  type SkipEvent,
+} from '@tempo/shared';
+import { attending, medicalRecord, patient, session, tapsPerSecondSeries } from '../../../../packages/shared/src/test-fixtures.ts';
 import { routes } from '../routes.tsx';
 import { aboutTests } from './aboutTests.ts';
+import { activityNames } from './activityNames.ts';
 import { getToken, setToken } from './auth.ts';
 import { metricDomains } from './domains.ts';
 import { metricNames } from './metricNames.ts';
@@ -539,12 +552,161 @@ describe('check-in', () => {
   });
 });
 
+describe('sessions', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  const sessionsPath = `/api/patients/${patient.id}/sessions`;
+  const sitToStandPath = `/api/patients/${patient.id}/metrics/sit-to-stand.count`;
+
+  const sessionList: PatientSessionListResponse = {
+    sessions: [
+      { ...session, id: 'sess-9', status: 'processed', startedAt: '2026-11-13T10:00:00.000Z' },
+      { ...session, id: 'sess-8', status: 'processed', mode: 'home', partial: true, startedAt: '2026-11-06T10:00:00.000Z' },
+      { ...session, id: 'sess-7', status: 'in-progress', startedAt: '2026-10-30T10:00:00.000Z' },
+      { ...session, id: 'sess-6', status: 'created', createdAt: '2026-10-23T10:00:00.000Z' },
+    ],
+  };
+
+  const sitToStandSkip: SkipEvent = {
+    id: 'evt-skip-9',
+    t: '2026-11-13T10:12:00.000Z',
+    type: 'skip',
+    label: 'It hurts',
+    sessionId: 'sess-9',
+    reason: 'pain',
+    stage: 'task',
+  };
+
+  const skipFlags: Flag[] = [
+    { id: 'flag-p', patientId: patient.id, sessionId: 'sess-9', kind: 'pain-skip', activityId: 'sit-to-stand', stage: 'task', painLocation: 'right-shoulder', createdAt: '2026-11-13T10:30:00.000Z' },
+    { id: 'flag-r', patientId: patient.id, sessionId: 'sess-9', kind: 'repeated-skip', activityId: 'sit-to-stand', previousSessionId: 'sess-8', reason: 'pain', createdAt: '2026-11-13T10:30:00.000Z' },
+  ];
+
+  const tapping = (value: number): MetricSeries => ({
+    ...tapsPerSecondSeries,
+    points: [{ t: '2026-11-13T10:02:00.000Z', value, sessionId: 'sess-9' }],
+    events: [],
+  });
+
+  function sessionsApi(overrides: Record<string, Handler> = {}) {
+    return stubApi({
+      [sessionsPath]: () => json(sessionList),
+      [`/api/patients/${patient.id}/flags`]: () => json({ flags: skipFlags }),
+      [`/api/patients/${patient.id}/metrics`]: () =>
+        json({
+          metrics: [
+            ...patientMetrics.metrics,
+            { metricId: 'sit-to-stand.count', unit: 'count', lateral: false },
+          ],
+        } satisfies PatientMetricsResponse),
+      [`${tappingPath}?range=Y&side=left`]: () => json(tapping(4.6)),
+      [`${tappingPath}?range=Y&side=right`]: () => json(tapping(3.6)),
+      [painPath]: () => json({ metricId: 'pain.intensity', unit: '0-10', points: [{ t: '2026-11-13T09:58:00.000Z', value: 2, sessionId: 'sess-9' }], baseline: null, referenceBand: null, events: [] }),
+      [sitToStandPath]: () => json({ metricId: 'sit-to-stand.count', unit: 'count', points: [], baseline: null, referenceBand: null, events: [sitToStandSkip] }),
+      ...overrides,
+    });
+  }
+
+  function section(name: string): HTMLElement {
+    const found = screen.getByRole('heading', { level: 2, name }).closest('section');
+    if (!found) throw new Error(`${name} section missing`);
+    return found;
+  }
+
+  it('lists sessions newest first with place and badges, each linking to its summary', async () => {
+    sessionsApi();
+    renderAt(`/clinician/patients/${patient.id}/sessions`);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sessions' })).toBeTruthy();
+    expect((await screen.findByRole('link', { name: patient.name })).getAttribute('href')).toBe(`/clinician/patients/${patient.id}`);
+    const links = screen.getAllByRole('link').filter((link) => link.getAttribute('href')?.includes('/sessions/'));
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['sess-9', 'sess-8', 'sess-7', 'sess-6'].map((id) => `/clinician/patients/${patient.id}/sessions/${id}`));
+    await waitFor(() => expect(links[0]?.textContent).toContain('Completed with skips'));
+    expect(links[0]?.textContent).toContain('13 Nov 2026');
+    expect(links[0]?.textContent).toContain('At the clinic');
+    expect(links[1]?.textContent).toContain('At home');
+    expect(links[1]?.textContent).toContain('Partial');
+    expect(links[1]?.textContent).not.toContain('Completed with skips');
+    expect(links[2]?.textContent).toContain('In progress');
+    expect(links[3]?.textContent).toContain('Not started');
+  });
+
+  it('shows an empty state when the patient has no sessions', async () => {
+    sessionsApi({ [sessionsPath]: () => json({ sessions: [] }) });
+    renderAt(`/clinician/patients/${patient.id}/sessions`);
+    expect(await screen.findByText('No sessions yet')).toBeTruthy();
+  });
+
+  it('lists the skipped activity with reason, stage, pain location and repeat note before the results', async () => {
+    const fetchMock = sessionsApi();
+    renderAt(`/clinician/patients/${patient.id}/sessions/sess-9`);
+
+    expect(await screen.findByRole('heading', { level: 1, name: '13 Nov 2026' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Sessions' }).getAttribute('href')).toBe(`/clinician/patients/${patient.id}/sessions`);
+    const couldNotDo = await screen.findByRole('heading', { level: 2, name: "Couldn't do" });
+    const results = screen.getByRole('heading', { level: 2, name: 'Results' });
+    expect(couldNotDo.compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const skipped = within(section("Couldn't do")).getByRole('link');
+    expect(skipped.textContent).toContain(activityNames['sit-to-stand']);
+    expect(skipped.textContent).toContain('It hurts · Stopped at task');
+    expect(skipped.textContent).toContain('Pain: Right shoulder');
+    expect(skipped.textContent).toContain('Also skipped last session');
+    expect(skipped.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/metrics/sit-to-stand.count`);
+    expect(screen.queryByRole('heading', { level: 2, name: activityNames['sit-to-stand'] })).toBeNull();
+    expect(screen.getByText('Completed with skips')).toBeTruthy();
+
+    const tappingRow = within(section(activityNames['finger-tapping'])).getByRole('link');
+    expect(tappingRow.textContent).toContain('L 4.6 taps/s · R 3.6 taps/s');
+    expect(tappingRow.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second?side=both`);
+    const painRow = within(section('Check-in')).getByRole('link');
+    expect(painRow.textContent).toContain('2 / 10');
+    expect(painRow.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/check-in`);
+
+    expect(seriesCalls(fetchMock, tappingPath).map((query) => query.get('side')).sort()).toEqual(['left', 'right']);
+    expect(seriesCalls(fetchMock, painPath).every((query) => query.get('range') === 'Y')).toBe(true);
+  });
+
+  it('shows Session not found for an unknown session', async () => {
+    sessionsApi();
+    renderAt(`/clinician/patients/${patient.id}/sessions/sess-404`);
+    expect(await screen.findByText('Session not found')).toBeTruthy();
+  });
+
+  it('shows the three latest sessions on the patient screen and a link to all of them', async () => {
+    sessionsApi();
+    renderAt(`/clinician/patients/${patient.id}`);
+    await screen.findByRole('heading', { level: 2, name: 'Sessions' });
+    const links = within(section('Sessions')).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      ...['sess-9', 'sess-8', 'sess-7'].map((id) => `/clinician/patients/${patient.id}/sessions/${id}`),
+      `/clinician/patients/${patient.id}/sessions`,
+    ]);
+    expect(links[0]?.textContent).toContain('Completed with skips');
+    expect(links[3]?.textContent).toBe('See all sessions');
+  });
+
+  it('links a skipped row on the metric detail to its session summary', async () => {
+    stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    await screen.findByRole('heading', { level: 2, name: 'Sessions' });
+    const skippedRow = within(sessionsSection()).getByRole('link', { name: /Skipped/ });
+    expect(skippedRow.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/sessions/sess-0`);
+  });
+});
+
 describe('metric maps', () => {
   it('describes every activity behind a metric', () => {
     for (const metricId of metricIds) {
       expect(aboutTests[metricDefinitions[metricId].activityId].summary).toBeTruthy();
     }
     expect(Object.keys(aboutTests).sort()).toEqual([...activityIds].sort());
+  });
+
+  it('names every activity', () => {
+    expect(Object.keys(activityNames).sort()).toEqual([...activityIds].sort());
   });
 
   it('names every metric and puts each in a domain', () => {
