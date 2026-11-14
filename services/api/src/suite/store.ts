@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Flag, Session } from '@tempo/shared';
+import type { Flag, Session, Suggestion } from '@tempo/shared';
 import type { Store } from '../store/types.ts';
 
 export type StoreFactory = () => Store;
@@ -18,7 +18,81 @@ const sessionFor = (patientId: string, id: string, createdAt: string): Session =
   createdAt,
 });
 
+const suggestionFor = (patientId: string, id: string, createdAt: string): Suggestion => ({
+  id,
+  patientId,
+  kind: 'review',
+  text: 'Tapping is below baseline since a dose change; the label lists dyskinesia — consider review.',
+  evidence: [{ label: 'Drug label lists dyskinesia', sourceUrl: 'https://api.fda.gov/drug/label.json?search=set_id:x' }],
+  status: 'proposed',
+  createdAt,
+  ai: { model: 'mock', promptVersion: 'suggest-review-1', inputRef: `suggestion:${id}` },
+});
+
 export const storeSuite = (factory: StoreFactory): void => {
+  describe('public data cache', () => {
+    it('keeps one entry per kind and query and replaces it on the next write', async () => {
+      const store = factory();
+      const query = unique('levodopa');
+      const entry = {
+        kind: 'rxnorm' as const,
+        query,
+        fetchedAt: '2026-11-13T10:00:00.000Z',
+        keepUntil: '2026-12-13T10:00:00.000Z',
+        value: [{ name: 'Carbidopa/Levodopa (Oral Pill) 25-100 mg Tab', rxnormId: '197444' }],
+      };
+      expect(await store.getPublicData('rxnorm', query)).toBeUndefined();
+      await store.putPublicData(entry);
+      expect(await store.getPublicData('rxnorm', query)).toEqual(entry);
+      expect(await store.getPublicData('icd10', query)).toBeUndefined();
+      const newer = { ...entry, fetchedAt: '2026-11-14T10:00:00.000Z', value: { label: null } };
+      await store.putPublicData(newer);
+      expect(await store.getPublicData('rxnorm', query)).toEqual(newer);
+    });
+  });
+
+  describe('suggestions', () => {
+    it('creates a suggestion once and never overwrites it', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const suggestion = suggestionFor(patientId, unique('sugg'), '2026-11-13T10:00:00.000Z');
+      expect(await store.createSuggestion(suggestion)).toBe(true);
+      expect(await store.createSuggestion({ ...suggestion, text: 'Another text.' })).toBe(false);
+      expect(await store.getSuggestion(patientId, suggestion.id)).toEqual(suggestion);
+      expect(await store.getSuggestion(unique('pat'), suggestion.id)).toBeUndefined();
+    });
+
+    it('lists only that patient’s suggestions, newest first', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const older = suggestionFor(patientId, unique('sugg'), '2026-11-01T10:00:00.000Z');
+      const newer = suggestionFor(patientId, unique('sugg'), '2026-11-12T10:00:00.000Z');
+      await store.createSuggestion(older);
+      await store.createSuggestion(newer);
+      await store.createSuggestion(suggestionFor(unique('pat'), unique('sugg'), '2026-11-05T10:00:00.000Z'));
+      expect(await store.listSuggestions(patientId)).toEqual([newer, older]);
+    });
+
+    it('records a decision, keeps edited text only while edited, and ignores an unknown suggestion', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const suggestion = suggestionFor(patientId, unique('sugg'), '2026-11-13T10:00:00.000Z');
+      await store.createSuggestion(suggestion);
+      const by = { decidedBy: 'staff-att-1', decidedAt: '2026-11-13T12:00:00.000Z' };
+
+      const edited = await store.decideSuggestion(patientId, suggestion.id, { status: 'edited', editedText: 'Review.', ...by });
+      expect(edited).toEqual({ ...suggestion, status: 'edited', editedText: 'Review.', ...by });
+      const accepted = await store.decideSuggestion(patientId, suggestion.id, { status: 'accepted', ...by });
+      expect(accepted).toEqual({ ...suggestion, status: 'accepted', ...by });
+      expect(await store.getSuggestion(patientId, suggestion.id)).toEqual(accepted);
+      expect(await store.createSuggestion(suggestion)).toBe(false);
+      expect(await store.getSuggestion(patientId, suggestion.id)).toEqual(accepted);
+
+      expect(await store.decideSuggestion(patientId, unique('sugg'), { status: 'dismissed', ...by })).toBeUndefined();
+      expect(await store.getSuggestion(patientId, 'sugg-missing')).toBeUndefined();
+    });
+  });
+
   describe('pain alert claim', () => {
     it('is granted once per session until it is released', async () => {
       const store = factory();

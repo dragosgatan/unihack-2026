@@ -1,4 +1,5 @@
-import type { MedicalRecord, Patient, SessionPlan } from '@tempo/shared';
+import type { MedicalRecord, Patient, SessionPlan, Suggestion } from '@tempo/shared';
+import { fallbackLabel } from '../../public-data/fallback.ts';
 import {
   buildHistory,
   daysBefore,
@@ -6,6 +7,7 @@ import {
   fractionBetween,
   isoDate,
   lerp,
+  minutesAfter,
   type MetricStory,
   type PatientSeed,
   type StoryMoment,
@@ -15,10 +17,12 @@ import { mulberry32 } from './random.ts';
 
 export const parkinsonsPatientId = 'pat-1';
 
+const levodopaChangeAt = (now: Date): Date => daysBefore(now, 42, 8);
+
 export const buildParkinsonsPatient = (now: Date): PatientSeed => {
   const historyStart = daysBefore(now, 91);
   const fall = daysBefore(now, 60, 17);
-  const levodopaChange = daysBefore(now, 42, 8);
+  const levodopaChange = levodopaChangeAt(now);
   const planChange = daysBefore(now, 30, 9);
 
   const trend =
@@ -148,4 +152,55 @@ export const buildParkinsonsPatient = (now: Date): PatientSeed => {
   });
 
   return { patient, record, plan, ...history };
+};
+
+export const parkinsonsSuggestionTerms = ['confusion', 'somnolence', 'dizziness', 'hallucinations'];
+
+export const buildParkinsonsSuggestion = (now: Date, { record, sessions, metricValues }: PatientSeed): Suggestion => {
+  const change = levodopaChangeAt(now);
+  const changeDate = isoDate(change);
+  const medication = record.medications.find((candidate) => candidate.startDate === changeDate);
+  const label = fallbackLabel({ name: 'Levodopa/Carbidopa', rxnormId: '197444' });
+  const values = metricValues
+    .filter((value) => value.metricId === 'trail-making-a.time')
+    .sort((a, b) => (a.t < b.t ? -1 : 1));
+  const session = sessions
+    .filter((candidate) => candidate.startedAt !== undefined && candidate.startedAt > change.toISOString())
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))[0];
+  const flagged = values.find((value) => value.sessionId === session?.id);
+  const [baseline] = values
+    .slice(0, 3)
+    .map((value) => value.value)
+    .sort((a, b) => a - b)
+    .slice(1, 2);
+  if (!medication || !label || !session || !flagged || baseline === undefined) {
+    throw new Error('The Parkinson seed is missing the data its suggestion points to');
+  }
+  const id = 'sugg-pat-1-levodopa';
+  const sessionDate = flagged.t.slice(0, 10);
+  return {
+    id,
+    patientId: parkinsonsPatientId,
+    kind: 'review',
+    text:
+      `Trail Making A time was ${flagged.value > baseline ? 'higher' : 'lower'} than the patient's baseline in the session on ${sessionDate} ` +
+      `(${flagged.value} s against ${baseline} s). This coincides with the Levodopa/Carbidopa dose change on ${changeDate}, ` +
+      `and the drug label lists ${parkinsonsSuggestionTerms.join(', ')} among its adverse reactions — consider review.`,
+    evidence: [
+      {
+        metricId: 'trail-making-a.time',
+        sessionId: session.id,
+        t: flagged.t,
+        label: `trail-making-a.time: ${flagged.value} s, baseline ${baseline} s`,
+      },
+      {
+        t: `${changeDate}T00:00:00.000Z`,
+        label: `${medication.name} dose or frequency changed to ${medication.dose} ${medication.frequency}`,
+      },
+      { label: `Drug label (${label.name}) lists ${parkinsonsSuggestionTerms.join(', ')}`, sourceUrl: label.sourceUrl },
+    ],
+    status: 'proposed',
+    createdAt: minutesAfter(new Date(flagged.t), 5).toISOString(),
+    ai: { model: 'mock', promptVersion: 'suggest-review-1', inputRef: `suggestion:${id}` },
+  };
 };

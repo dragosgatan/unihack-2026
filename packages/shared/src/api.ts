@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema, languageSchema, sideSchema } from './common.ts';
 import { pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
+import { diagnosisLookupResponseSchema, lookupQuerySchema, medicationLookupResponseSchema } from './lookup.ts';
 import { metricIdSchema, metricSeriesSchema } from './metrics.ts';
 import { medicalRecordSchema } from './record.ts';
 import {
@@ -10,6 +11,7 @@ import {
   sessionStatusSchema,
   submittedResultSchema,
 } from './session.ts';
+import { suggestionSchema } from './suggestion.ts';
 
 export const sessionCodeSchema = z.string().regex(/^\d{6}$/);
 
@@ -130,6 +132,22 @@ export const startHomeSessionResponseSchema = z.object({
   plan: sessionPlanSchema,
 });
 
+export const suggestionParamsSchema = z.object({ patientId: idSchema, suggestionId: idSchema });
+
+export const suggestionListResponseSchema = z.object({
+  suggestions: z.array(suggestionSchema),
+});
+
+export const suggestionDecisionRequestSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('accepted') }),
+  z.object({ status: z.literal('dismissed') }),
+  z.object({ status: z.literal('edited'), editedText: z.string().trim().min(1).max(2000) }),
+]);
+
+export const suggestionDecisionResponseSchema = z.object({
+  suggestion: suggestionSchema,
+});
+
 export type RouteDefinition = {
   method: 'GET' | 'POST';
   path: string;
@@ -232,6 +250,35 @@ export const routes = {
     auth: 'device',
     response: startHomeSessionResponseSchema,
   },
+  lookupMedications: {
+    method: 'GET',
+    path: '/api/lookup/medications',
+    auth: 'staff',
+    query: lookupQuerySchema,
+    response: medicationLookupResponseSchema,
+  },
+  lookupDiagnoses: {
+    method: 'GET',
+    path: '/api/lookup/diagnoses',
+    auth: 'staff',
+    query: lookupQuerySchema,
+    response: diagnosisLookupResponseSchema,
+  },
+  listSuggestions: {
+    method: 'GET',
+    path: '/api/patients/:patientId/suggestions',
+    auth: 'staff',
+    params: patientParamsSchema,
+    response: suggestionListResponseSchema,
+  },
+  decideSuggestion: {
+    method: 'POST',
+    path: '/api/patients/:patientId/suggestions/:suggestionId/decision',
+    auth: 'staff',
+    params: suggestionParamsSchema,
+    body: suggestionDecisionRequestSchema,
+    response: suggestionDecisionResponseSchema,
+  },
 } as const satisfies Record<string, RouteDefinition>;
 
 export type RouteName = keyof typeof routes;
@@ -262,3 +309,7 @@ export type DevicePairingCodeResponse = z.infer<typeof devicePairingCodeResponse
 export type DeviceListResponse = z.infer<typeof deviceListResponseSchema>;
 export type RevokeDeviceResponse = z.infer<typeof revokeDeviceResponseSchema>;
 export type StartHomeSessionResponse = z.infer<typeof startHomeSessionResponseSchema>;
+export type SuggestionParams = z.infer<typeof suggestionParamsSchema>;
+export type SuggestionListResponse = z.infer<typeof suggestionListResponseSchema>;
+export type SuggestionDecisionRequest = z.infer<typeof suggestionDecisionRequestSchema>;
+export type SuggestionDecisionResponse = z.infer<typeof suggestionDecisionResponseSchema>;

@@ -240,12 +240,12 @@ describe('TempoStack', () => {
     expect(definition.match(/States\.ALL/g)).toHaveLength(pipelineSteps.length);
   });
 
-  it('gives only the two AI steps the Gemini key and a longer timeout', () => {
+  it('gives only the AI steps the Gemini key and a longer timeout', () => {
     const functions = Object.values(template.findResources('AWS::Lambda::Function')) as {
       Properties: { Handler: string; Timeout: number; Environment?: { Variables?: Record<string, unknown> } };
     }[];
     const withKey = functions.filter((fn) => fn.Properties.Environment?.Variables?.['GEMINI_SECRET_ARN'] !== undefined);
-    expect(withKey.map((fn) => fn.Properties.Handler).sort()).toEqual(['ai-items.handler', 'report.handler']);
+    expect(withKey.map((fn) => fn.Properties.Handler).sort()).toEqual(['ai-items.handler', 'report.handler', 'suggest.handler']);
     for (const fn of withKey) expect(fn.Properties.Timeout).toBe(180);
   });
 

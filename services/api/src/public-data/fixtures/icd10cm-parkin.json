@@ -1,0 +1,58 @@
+[
+  13,
+  [
+    "G20.A1",
+    "G20.A2",
+    "G20.B1",
+    "G20.B2",
+    "G20.C",
+    "G21.11",
+    "G21.19",
+    "G21.2",
+    "G21.3",
+    "G21.4"
+  ],
+  null,
+  [
+    [
+      "G20.A1",
+      "Parkinson's disease without dyskinesia, without mention of fluctuations"
+    ],
+    [
+      "G20.A2",
+      "Parkinson's disease without dyskinesia, with fluctuations"
+    ],
+    [
+      "G20.B1",
+      "Parkinson's disease with dyskinesia, without mention of fluctuations"
+    ],
+    [
+      "G20.B2",
+      "Parkinson's disease with dyskinesia, with fluctuations"
+    ],
+    [
+      "G20.C",
+      "Parkinsonism, unspecified"
+    ],
+    [
+      "G21.11",
+      "Neuroleptic induced parkinsonism"
+    ],
+    [
+      "G21.19",
+      "Other drug induced secondary parkinsonism"
+    ],
+    [
+      "G21.2",
+      "Secondary parkinsonism due to other external agents"
+    ],
+    [
+      "G21.3",
+      "Postencephalitic parkinsonism"
+    ],
+    [
+      "G21.4",
+      "Vascular parkinsonism"
+    ]
+  ]
+]

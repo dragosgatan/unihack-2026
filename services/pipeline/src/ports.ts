@@ -2,6 +2,7 @@ import type {
   ActivityResult,
   Baseline,
   Flag,
+  MedicalRecord,
   MetricId,
   MetricPoint,
   Patient,
@@ -11,7 +12,9 @@ import type {
   SessionStatus,
   Side,
   Staff,
+  Suggestion,
 } from '@tempo/shared';
+import type { PublicData } from '@tempo/api/public-data';
 import type { PipelineAi } from './ai-port.ts';
 
 export type PointWrite = {
@@ -26,7 +29,9 @@ export type PointWrite = {
 export type PipelineStore = {
   getSession(sessionId: string): Promise<Session | undefined>;
   listPatientSessions(patientId: string): Promise<Session[]>;
-  getPatientDetail(patientId: string): Promise<{ patient: Patient; plan: SessionPlan | undefined } | undefined>;
+  getPatientDetail(
+    patientId: string,
+  ): Promise<{ patient: Patient; record: MedicalRecord | undefined; plan: SessionPlan | undefined } | undefined>;
   getStaff(staffId: string): Promise<Staff | undefined>;
   listResults(sessionId: string): Promise<ActivityResult[]>;
   putResults(sessionId: string, results: ActivityResult[]): Promise<void>;
@@ -41,6 +46,8 @@ export type PipelineStore = {
   listFlags(patientId: string, sessionId: string): Promise<Flag[]>;
   putReport(report: SessionReport): Promise<void>;
   getReport(sessionId: string): Promise<SessionReport | undefined>;
+  getSuggestion(patientId: string, suggestionId: string): Promise<Suggestion | undefined>;
+  createSuggestion(suggestion: Suggestion): Promise<boolean>;
 };
 
 export type Email = { to: string; subject: string; text: string };
@@ -50,6 +57,7 @@ export type SendEmail = (email: Email) => Promise<void>;
 export type PipelineDeps = {
   store: PipelineStore;
   ai: PipelineAi;
+  publicData: PublicData;
   sendEmail: SendEmail;
   clock: () => Date;
   appUrl: string;

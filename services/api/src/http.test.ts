@@ -6,6 +6,7 @@ import { mountRoute } from './http.ts';
 import { buildSeed } from './mock/seed/build.ts';
 import { attending } from './mock/seed/institution.ts';
 import { fixedNow } from './mock/testing.ts';
+import { offlinePublicData } from './public-data/index.ts';
 import { createMemoryStore } from './store/memory.ts';
 
 const internalBody = { error: { code: 'internal', message: 'Something went wrong' } };
@@ -41,6 +42,7 @@ describe('createApp', () => {
       tokenSecret: async () => 'secret',
       clock: () => fixedNow,
       startPipeline: async () => {},
+      publicData: offlinePublicData,
     });
     const res = await app.request('/api/me');
     expect(res.status).toBe(500);

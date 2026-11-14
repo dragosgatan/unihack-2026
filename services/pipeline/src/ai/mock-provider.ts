@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import type { AiPart, AiProvider, AiTask } from './provider.ts';
+import { suggestReviewSentSchema } from './suggest-review.ts';
 
 export const mockModel = 'mock';
 
-const canned: Record<Exclude<AiTask, 'session-summary'>, unknown> = {
+const canned: Record<Exclude<AiTask, 'session-summary' | 'suggestion'>, unknown> = {
   'clock-drawing': {
     contour: { score: 1, justification: 'The face is a closed, roughly circular line.' },
     numbers: { score: 1, justification: 'Numbers 1 to 12 are present and in order around the face.' },
@@ -57,10 +58,35 @@ const summaryFrom = (parts: AiPart[]): unknown => {
   };
 };
 
+const textOf = (parts: AiPart[]): string => parts.flatMap((part) => ('text' in part ? [part.text] : [])).join('');
+
+const changePhrases = {
+  started: (name: string) => `starting ${name}`,
+  stopped: (name: string) => `stopping ${name}`,
+  'dose-changed': (name: string) => `a dose change of ${name}`,
+};
+
+const suggestionFrom = (parts: AiPart[]): unknown => {
+  const { metricId, side, direction, value, baseline, sessionDate, medication, labelTerms } =
+    suggestReviewSentSchema.parse(JSON.parse(textOf(parts)));
+  const metric = `${metricId}${side ? ` (${side})` : ''}`;
+  return {
+    text: [
+      `${metric} was ${direction} than its baseline on ${sessionDate} (${value} against ${baseline}).`,
+      `This coincides with ${changePhrases[medication.change](medication.name)} on ${medication.date}, whose label lists ${labelTerms.join(', ')} — consider review.`,
+    ].join(' '),
+  };
+};
+
 export const createMockProvider = (): AiProvider => ({
   name: 'mock',
   generate: async ({ task, parts }) => ({
-    data: task === 'session-summary' ? summaryFrom(parts) : structuredClone(canned[task]),
+    data:
+      task === 'session-summary'
+        ? summaryFrom(parts)
+        : task === 'suggestion'
+          ? suggestionFrom(parts)
+          : structuredClone(canned[task]),
     model: mockModel,
   }),
 });

@@ -1,4 +1,5 @@
 import type { ActivityId, Flag, MetricId, Side, SkipFlag } from '@tempo/shared';
+import type { PublicDataKind } from './types.ts';
 
 export type Key = { pk: string; sk: string };
 export type IndexKey = { gsi1pk: string; gsi1sk: string };
@@ -104,3 +105,14 @@ export const keyOfFlag = (flag: Flag): Key =>
     : skipFlagKey(flag.patientId, flag.sessionId, flag.kind, flag.activityId);
 
 export const codeKey = (code: string): Key => ({ pk: `CODE#${code}`, sk: meta });
+
+export const publicDataKey = (kind: PublicDataKind, query: string): Key => ({
+  pk: `PUBLIC#${kind}#${query}`,
+  sk: meta,
+});
+
+export const suggestionPrefix = 'SUGGESTION#';
+export const suggestionKey = (patientId: string, suggestionId: string): Key => ({
+  pk: patientPk(patientId),
+  sk: `${suggestionPrefix}${suggestionId}`,
+});

@@ -5,6 +5,7 @@ import {
   sessionPlanSchema,
   sessionSchema,
   staffSchema,
+  suggestionSchema,
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
 import type { Store } from './types.ts';
@@ -30,6 +31,7 @@ export const remapSeed = (seed: Seed, ids: ReadonlyMap<string, string>): Seed =>
     patientId: ids.get(value.patientId) ?? value.patientId,
     sessionId: ids.get(value.sessionId) ?? value.sessionId,
   })),
+  suggestions: suggestionSchema.array().parse(remap(seed.suggestions, ids)),
 });
 
 export const loadSeed = async (store: Store, seed: Seed, ids: ReadonlyMap<string, string> = new Map()): Promise<Seed> => {
@@ -41,5 +43,6 @@ export const loadSeed = async (store: Store, seed: Seed, ids: ReadonlyMap<string
   for (const plan of remapped.plans) await store.putPlan(plan);
   for (const session of remapped.sessions) await store.putSession(session);
   await store.putMetricValues(remapped.metricValues);
+  for (const suggestion of remapped.suggestions) await store.createSuggestion(suggestion);
   return remapped;
 };

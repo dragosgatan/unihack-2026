@@ -1,7 +1,7 @@
 import type { AiProviderName } from '@tempo/shared';
 import type { z } from 'zod';
 
-export type AiTask = 'clock-drawing' | 'speech' | 'session-summary' | 'record-intake' | 'episode-intake';
+export type AiTask = 'clock-drawing' | 'speech' | 'session-summary' | 'record-intake' | 'episode-intake' | 'suggestion';
 
 export type Media = { mimeType: string; data: Uint8Array };
 

@@ -1,3 +1,4 @@
+import { offlinePublicData } from '@tempo/api/public-data';
 import { createMemoryStore, type Store } from '@tempo/api/store';
 import type {
   ActivityId,
@@ -95,6 +96,7 @@ export const fixture = async (): Promise<Fixture> => {
   const deps: PipelineDeps = {
     store,
     ai: createPipelineAi(createAi({ provider: createMockProvider(), now: clock })),
+    publicData: offlinePublicData,
     sendEmail: async (email) => {
       emails.push(email);
     },

@@ -28,6 +28,42 @@ describe('runPipeline', () => {
     ]);
   });
 
+  it('turns a flag that follows a dose change into one proposed suggestion, also when it runs twice', async () => {
+    const { store, deps } = await fixture();
+    const levodopa = { name: 'Levodopa/Carbidopa', rxnormId: '197444', dose: '100/25 mg' };
+    await store.putRecord({
+      patientId: patient.id,
+      yearsOfEducation: 12,
+      dominantHand: 'right',
+      affectedLimbs: [],
+      diagnoses: [],
+      medications: [
+        { ...levodopa, id: 'med-1', frequency: 'three times daily', startDate: '2025-03-10', stopDate: '2026-10-02' },
+        { ...levodopa, id: 'med-2', frequency: 'four times daily', startDate: '2026-10-02' },
+      ],
+      limitations: [],
+      clinicalNotes: '',
+      rehabGoals: [],
+      timeline: [],
+      updatedAt: day(1),
+      updatedBy: patient.attendingId,
+    });
+    await history(store, tapsPerSecond, 'right', [4, 4, 4, 2]);
+    await submit(store, 'sess-1', [rightTapsPerSecond(day(10), 2)]);
+
+    await runPipeline(deps, { sessionId: 'sess-1' });
+    await runPipeline(deps, { sessionId: 'sess-1' });
+
+    const suggestions = await store.listSuggestions(patient.id);
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({ kind: 'review', status: 'proposed' });
+    expect(suggestions[0]?.evidence.map((entry) => entry.sessionId ?? entry.sourceUrl ?? entry.t)).toEqual([
+      'sess-1',
+      '2026-10-02T00:00:00.000Z',
+      expect.stringMatching(/^https:\/\/api\.fda\.gov\//),
+    ]);
+  });
+
   it('gives the same flags, one pain email and one report when a session with skips runs twice', async () => {
     const { store, deps, emails } = await fixture();
     await submit(store, 'sess-1', [rightTapsPerSecond(day(10), 4), painSkip(day(10, 11))]);

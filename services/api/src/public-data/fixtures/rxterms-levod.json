@@ -1,0 +1,119 @@
+[
+  7,
+  [
+    "Carbidopa/Levodopa (Oral Pill)",
+    "Carbidopa/Levodopa XR (Oral Pill)",
+    "Carbidopa/Entacapone/Levodopa (Oral Pill)",
+    "Carbidopa/Levodopa (Oral Disintegrating)",
+    "Carbidopa/Levodopa (Oral Liquid)",
+    "Levodopa (Inhalant)",
+    "Carbidopa/Levodopa (Injectable)"
+  ],
+  {
+    "RXCUIS": [
+      [
+        "197443",
+        "197444",
+        "197445"
+      ],
+      [
+        "1600773",
+        "308988",
+        "2690259",
+        "1600775",
+        "1600914",
+        "308989",
+        "2690279",
+        "1600916",
+        "2690284",
+        "2690290"
+      ],
+      [
+        "403850",
+        "810090",
+        "403851",
+        "810083",
+        "403852",
+        "730988"
+      ],
+      [
+        "483090",
+        "476399",
+        "476515"
+      ],
+      [
+        "1599846"
+      ],
+      [
+        "2107616"
+      ],
+      [
+        "2695782"
+      ]
+    ],
+    "STRENGTHS_AND_FORMS": [
+      [
+        "10-100 mg Tab",
+        "25-100 mg Tab",
+        "25-250 mg Tab"
+      ],
+      [
+        "23.75-95 mg 8 HR XR Cap",
+        "25-100 mg XR Tab",
+        "35-140 mg XR Cap",
+        "36.25-145 mg 8 HR XR Cap",
+        "48.75-195 mg 8 HR XR Cap",
+        "50-200 mg XR Tab",
+        "52.5-210 mg XR Cap",
+        "61.25-245 mg 8 HR XR Cap",
+        "70-280 mg XR Cap",
+        "87.5-350 mg XR Cap"
+      ],
+      [
+        "12.5-200-50 mg Tab",
+        "18.75-200-75 mg Tab",
+        "25-200-100 mg Tab",
+        "31.25-200-125 mg Tab",
+        "37.5-200-150 mg Tab",
+        "50-200-200 mg Tab"
+      ],
+      [
+        "10-100 mg Tab",
+        "25-100 mg Tab",
+        "25-250 mg Tab"
+      ],
+      [
+        "4.63-20 mg/ml Susp"
+      ],
+      [
+        "42 mg Pwdr"
+      ],
+      [
+        "12-240 mg/ml Injection 10 ml"
+      ]
+    ]
+  },
+  [
+    [
+      "Carbidopa/Levodopa (Oral Pill)"
+    ],
+    [
+      "Carbidopa/Levodopa XR (Oral Pill)"
+    ],
+    [
+      "Carbidopa/Entacapone/Levodopa (Oral Pill)"
+    ],
+    [
+      "Carbidopa/Levodopa (Oral Disintegrating)"
+    ],
+    [
+      "Carbidopa/Levodopa (Oral Liquid)"
+    ],
+    [
+      "Levodopa (Inhalant)"
+    ],
+    [
+      "Carbidopa/Levodopa (Injectable)"
+    ]
+  ]
+]

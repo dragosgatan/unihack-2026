@@ -27,6 +27,7 @@ import {
   type RouteResponse,
 } from './http.ts';
 import type { PipelineStarter } from './pipeline-starter.ts';
+import type { PublicData } from './public-data/index.ts';
 import { buildMetricSeries, listPatientMetrics } from './series.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
@@ -38,6 +39,7 @@ export type AppOptions = {
   tokenSecret: () => Promise<string>;
   clock: () => Date;
   startPipeline: PipelineStarter;
+  publicData: PublicData;
   demoSessionCodes?: ReadonlyMap<string, string>;
 };
 
@@ -49,6 +51,7 @@ export const createApp = ({
   tokenSecret,
   clock,
   startPipeline,
+  publicData,
   demoSessionCodes = new Map(),
 }: AppOptions): Hono => {
   const app = new Hono();
@@ -261,6 +264,26 @@ export const createApp = ({
     };
     await store.putSession(session);
     return { session, plan: detail.plan };
+  });
+
+  staffRoute(routes.lookupMedications, ({ query }) => publicData.searchMedications(query.q));
+
+  staffRoute(routes.lookupDiagnoses, ({ query }) => publicData.searchDiagnoses(query.q));
+
+  staffRoute(routes.listSuggestions, async ({ staff, params }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    return { suggestions: await store.listSuggestions(patient.id) };
+  });
+
+  staffRoute(routes.decideSuggestion, async ({ staff, params, body }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    const suggestion = await store.decideSuggestion(patient.id, params.suggestionId, {
+      ...body,
+      decidedBy: staff.id,
+      decidedAt: clock().toISOString(),
+    });
+    if (!suggestion) throw new HttpError('not_found', 'Suggestion not found');
+    return { suggestion };
   });
 
   app.notFound(() => errorResponse('not_found', 'Route not found'));

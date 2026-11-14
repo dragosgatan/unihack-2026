@@ -30,6 +30,8 @@ export const accessSuite = (factory: HarnessFactory): void => {
 
     it('rejects an unknown or malformed token with 401', async () => {
       expectError(await call(h.app, '/api/me', { token: 'mock-nobody' }), 401, 'unauthenticated');
+      expectError(await call(h.app, '/api/lookup/medications?q=levo', { token: 'mock-nobody' }), 401, 'unauthenticated');
+      expectError(await call(h.app, '/api/lookup/diagnoses?q=G20', { token: 'mock-nobody' }), 401, 'unauthenticated');
       expectError(await call(h.app, '/api/patients', { authorization: 'mock-attending' }), 401, 'unauthenticated');
     });
   });
@@ -54,6 +56,7 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${parkinson}/pairing-codes`, { method: 'POST', token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/devices`, { token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/devices/dev-1/revoke`, { method: 'POST', token }), 404, 'not_found');
+      expectError(await call(h.app, `${parkinson}/suggestions`, { token }), 404, 'not_found');
       expect((await call(h.app, `/api/patients/${h.id('pat-2')}`, { token })).status).toBe(200);
     });
 
@@ -72,6 +75,14 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${patient}/pairing-codes`, { method: 'POST', token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/devices`, { token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/devices/dev-1/revoke`, { method: 'POST', token }), 403, 'forbidden');
+      expectError(await call(h.app, `${patient}/suggestions`, { token }), 403, 'forbidden');
+    });
+
+    it('lets every staff role use the lookups, which hold no patient data', async () => {
+      for (const token of ['mock-admin', 'mock-attending', 'mock-therapist']) {
+        expect((await call(h.app, '/api/lookup/medications?q=levo', { token })).status).toBe(200);
+        expect((await call(h.app, '/api/lookup/diagnoses?q=G20', { token })).status).toBe(200);
+      }
     });
 
     it('returns 404 for an unknown patient or device', async () => {
@@ -105,6 +116,16 @@ export const accessSuite = (factory: HarnessFactory): void => {
         400,
         'invalid_request',
       );
+    });
+
+    it.each(['medications', 'diagnoses'])('needs a lookup query of 2 to 80 characters for %s', async (kind) => {
+      const lookup = (query: string) => call(h.app, `/api/lookup/${kind}${query}`);
+      expectError(await lookup(''), 400, 'invalid_request');
+      expectError(await lookup('?q=a'), 400, 'invalid_request');
+      expectError(await lookup('?q=%20%20a%20%20'), 400, 'invalid_request');
+      expectError(await lookup(`?q=${'a'.repeat(81)}`), 400, 'invalid_request');
+      expect((await lookup(`?q=${'a'.repeat(80)}`)).status).toBe(200);
+      expect((await lookup('?q=%20i6%20')).status).toBe(200);
     });
 
     it('answers unknown routes with an API error', async () => {

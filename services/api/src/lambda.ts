@@ -4,6 +4,7 @@ import { createCognitoStaffAuth } from './auth/staff.ts';
 import { cacheSuccess } from './cache.ts';
 import { createApp } from './create-app.ts';
 import { createStepFunctionsStarter } from './pipeline-starter.ts';
+import { createPublicData } from './public-data/index.ts';
 import { createDynamoStore } from './store/dynamo.ts';
 
 const requiredEnv = (name: string): string => {
@@ -32,5 +33,6 @@ const staffAuth = createCognitoStaffAuth({
 });
 
 const startPipeline = createStepFunctionsStarter(requiredEnv('STATE_MACHINE_ARN'));
+const publicData = createPublicData({ fetch, clock, cache: store });
 
-export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline }));
+export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline, publicData }));

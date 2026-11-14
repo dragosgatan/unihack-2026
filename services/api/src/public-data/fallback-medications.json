@@ -1,0 +1,306 @@
+[
+  {
+    "name": "Carbidopa/Levodopa (Oral Pill) 10-100 mg Tab",
+    "rxnormId": "197443"
+  },
+  {
+    "name": "Carbidopa/Levodopa (Oral Pill) 25-100 mg Tab",
+    "rxnormId": "197444"
+  },
+  {
+    "name": "Carbidopa/Levodopa (Oral Pill) 25-250 mg Tab",
+    "rxnormId": "197445"
+  },
+  {
+    "name": "Clopidogrel (Oral Pill) 75 mg Tab",
+    "rxnormId": "309362"
+  },
+  {
+    "name": "Clopidogrel (Oral Pill) 300 mg Tab",
+    "rxnormId": "749196"
+  },
+  {
+    "name": "Atorvastatin (Oral Pill) 10 mg Tab",
+    "rxnormId": "617312"
+  },
+  {
+    "name": "Atorvastatin (Oral Pill) 20 mg Tab",
+    "rxnormId": "617310"
+  },
+  {
+    "name": "Atorvastatin (Oral Pill) 40 mg Tab",
+    "rxnormId": "617311"
+  },
+  {
+    "name": "Atorvastatin (Oral Pill) 80 mg Tab",
+    "rxnormId": "259255"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 0.25 mg Tab",
+    "rxnormId": "312845"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 0.5 mg Tab",
+    "rxnormId": "312846"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 1 mg Tab",
+    "rxnormId": "314208"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 2 mg Tab",
+    "rxnormId": "312847"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 3 mg Tab",
+    "rxnormId": "283858"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 4 mg Tab",
+    "rxnormId": "562704"
+  },
+  {
+    "name": "rOPINIRole (Oral Pill) 5 mg Tab",
+    "rxnormId": "312849"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 0.125 mg Tab",
+    "rxnormId": "859033"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 0.25 mg Tab",
+    "rxnormId": "859040"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 0.5 mg Tab",
+    "rxnormId": "859044"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 0.75 mg Tab",
+    "rxnormId": "858625"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 1 mg Tab",
+    "rxnormId": "859052"
+  },
+  {
+    "name": "Pramipexole (Oral Pill) 1.5 mg Tab",
+    "rxnormId": "859048"
+  },
+  {
+    "name": "Rasagiline (Oral Pill) 0.5 mg Tab",
+    "rxnormId": "636664"
+  },
+  {
+    "name": "Rasagiline (Oral Pill) 1 mg Tab",
+    "rxnormId": "608328"
+  },
+  {
+    "name": "Amantadine (Oral Pill) 100 mg Cap",
+    "rxnormId": "849389"
+  },
+  {
+    "name": "Amantadine (Oral Pill) 100 mg Tab",
+    "rxnormId": "849395"
+  },
+  {
+    "name": "amLODIPine (Oral Pill) 2.5 mg Tab",
+    "rxnormId": "308136"
+  },
+  {
+    "name": "amLODIPine (Oral Pill) 5 mg Tab",
+    "rxnormId": "197361"
+  },
+  {
+    "name": "amLODIPine (Oral Pill) 10 mg Tab",
+    "rxnormId": "308135"
+  },
+  {
+    "name": "metFORMIN (Oral Pill) 500 mg Tab",
+    "rxnormId": "861007"
+  },
+  {
+    "name": "metFORMIN (Oral Pill) 625 mg Tab",
+    "rxnormId": "861021"
+  },
+  {
+    "name": "metFORMIN (Oral Pill) 750 mg Tab",
+    "rxnormId": "2703582"
+  },
+  {
+    "name": "metFORMIN (Oral Pill) 850 mg Tab",
+    "rxnormId": "861010"
+  },
+  {
+    "name": "metFORMIN (Oral Pill) 1,000 mg Tab",
+    "rxnormId": "861004"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 81 mg Cap",
+    "rxnormId": "252857"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 81 mg DR Tab",
+    "rxnormId": "308416"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 81 mg Tab",
+    "rxnormId": "243670"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 325 mg Cap",
+    "rxnormId": "198466"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 325 mg DR Tab",
+    "rxnormId": "198467"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 325 mg Tab",
+    "rxnormId": "212033"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 500 mg DR Tab",
+    "rxnormId": "308409"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 500 mg Tab",
+    "rxnormId": "198471"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 650 mg DR Tab",
+    "rxnormId": "308411"
+  },
+  {
+    "name": "Aspirin (Oral Pill) 650 mg Tab",
+    "rxnormId": "198475"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 100 mg Tab",
+    "rxnormId": "198405"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 200 mg Cap",
+    "rxnormId": "310964"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 200 mg Tab",
+    "rxnormId": "310965"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 300 mg Tab",
+    "rxnormId": "197804"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 400 mg Tab",
+    "rxnormId": "197805"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 600 mg Tab",
+    "rxnormId": "197806"
+  },
+  {
+    "name": "Ibuprofen (Oral Pill) 800 mg Tab",
+    "rxnormId": "197807"
+  },
+  {
+    "name": "Acetaminophen (Oral Pill) 325 mg Cap",
+    "rxnormId": "198436"
+  },
+  {
+    "name": "Acetaminophen (Oral Pill) 325 mg Tab",
+    "rxnormId": "313782"
+  },
+  {
+    "name": "Acetaminophen (Oral Pill) 500 mg Cap",
+    "rxnormId": "198439"
+  },
+  {
+    "name": "Acetaminophen (Oral Pill) 500 mg Tab",
+    "rxnormId": "198440"
+  },
+  {
+    "name": "Acetaminophen (Oral Pill) 650 mg Tab",
+    "rxnormId": "198444"
+  },
+  {
+    "name": "Baclofen (Oral Pill) 5 mg Tab",
+    "rxnormId": "430902"
+  },
+  {
+    "name": "Baclofen (Oral Pill) 10 mg Tab",
+    "rxnormId": "197391"
+  },
+  {
+    "name": "Baclofen (Oral Pill) 15 mg Tab",
+    "rxnormId": "2679605"
+  },
+  {
+    "name": "Baclofen (Oral Pill) 20 mg Tab",
+    "rxnormId": "197392"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 100 mg Cap",
+    "rxnormId": "310430"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 100 mg Tab",
+    "rxnormId": "476673"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 200 mg Cap",
+    "rxnormId": "2739001"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 300 mg Cap",
+    "rxnormId": "310431"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 300 mg Once-Daily Tab",
+    "rxnormId": "1806380"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 400 mg Cap",
+    "rxnormId": "310432"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 400 mg Tab",
+    "rxnormId": "476679"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 450 mg Once-Daily Tab",
+    "rxnormId": "2634747"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 600 mg Once-Daily Tab",
+    "rxnormId": "1806382"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 600 mg Tab",
+    "rxnormId": "310433"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 750 mg Once-Daily Tab",
+    "rxnormId": "2634751"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 800 mg Tab",
+    "rxnormId": "310434"
+  },
+  {
+    "name": "Gabapentin (Oral Pill) 900 mg Once-Daily Tab",
+    "rxnormId": "2634743"
+  },
+  {
+    "name": "Donepezil (Oral Pill) 5 mg Tab",
+    "rxnormId": "997229"
+  },
+  {
+    "name": "Donepezil (Oral Pill) 10 mg Tab",
+    "rxnormId": "997223"
+  },
+  {
+    "name": "Donepezil (Oral Pill) 23 mg Tab",
+    "rxnormId": "1100184"
+  }
+]

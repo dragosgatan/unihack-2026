@@ -94,6 +94,27 @@ export const contractSuite = (factory: HarnessFactory): void => {
       }
     });
 
+    it('GET /api/lookup/medications and /api/lookup/diagnoses', async () => {
+      const medications = expectValid(routes.lookupMedications, await call(h.app, '/api/lookup/medications?q=levodopa'));
+      expect(medications.items).toContainEqual({ name: 'Carbidopa/Levodopa (Oral Pill) 25-100 mg Tab', rxnormId: '197444' });
+      const diagnoses = expectValid(routes.lookupDiagnoses, await call(h.app, '/api/lookup/diagnoses?q=I63'));
+      expect(diagnoses.items).toContainEqual({ code: 'I63.9', label: 'Cerebral infarction, unspecified' });
+    });
+
+    it.each(seedPatientIds)('GET /api/patients/%s/suggestions', async (patientId) => {
+      expectValid(routes.listSuggestions, await call(h.app, `/api/patients/${h.id(patientId)}/suggestions`));
+    });
+
+    it('POST /api/patients/:patientId/suggestions/:suggestionId/decision', async () => {
+      const base = `/api/patients/${h.id('pat-1')}/suggestions`;
+      const [proposed] = expectValid(routes.listSuggestions, await call(h.app, base)).suggestions;
+      const decided = expectValid(
+        routes.decideSuggestion,
+        await call(h.app, `${base}/${proposed?.id}/decision`, { method: 'POST', body: { status: 'dismissed' } }),
+      );
+      expect(decided.suggestion).toMatchObject({ id: proposed?.id, status: 'dismissed', decidedAt: fixedNow.toISOString() });
+    });
+
     it('covers every route in the shared table', () => {
       const names = Object.entries(routes).flatMap(([name, route]) => (covered.has(route) ? [name] : []));
       expect(names.sort()).toEqual(Object.keys(routes).sort());

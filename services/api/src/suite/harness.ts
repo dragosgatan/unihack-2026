@@ -8,6 +8,7 @@ import { createApp } from '../create-app.ts';
 import type { Seed } from '../mock/seed/build.ts';
 import { mockStaffTokens } from '../mock/seed/institution.ts';
 import { call, fixedNow } from '../mock/testing.ts';
+import { offlinePublicData } from '../public-data/index.ts';
 import { createDynamoStore } from '../store/dynamo.ts';
 import { loadSeed } from '../store/load-seed.ts';
 import { createMemoryStore } from '../store/memory.ts';
@@ -37,6 +38,7 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
     startPipeline: async (sessionId) => {
       startedPipelines.push(sessionId);
     },
+    publicData: offlinePublicData,
   });
   return {
     app,

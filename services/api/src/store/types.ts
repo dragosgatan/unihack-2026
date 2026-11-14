@@ -17,6 +17,8 @@ import type {
   Staff,
   SubmittedResult,
   Side,
+  Suggestion,
+  SuggestionStatus,
 } from '@tempo/shared';
 
 export type MetricValue = {
@@ -41,6 +43,23 @@ export type CodeKind = CodeEntry['kind'];
 export type Submission = { partial: boolean; submittedAt: string; results: SubmittedResult[] };
 
 export type TimeRange = { from: string; to: string };
+
+export type PublicDataKind = 'rxnorm' | 'icd10' | 'openfda-label';
+
+export type PublicDataEntry = {
+  kind: PublicDataKind;
+  query: string;
+  fetchedAt: string;
+  keepUntil: string;
+  value: unknown;
+};
+
+export type SuggestionDecision = {
+  status: Exclude<SuggestionStatus, 'proposed'>;
+  editedText?: string;
+  decidedBy: string;
+  decidedAt: string;
+};
 
 export type Store = {
   getStaff(staffId: string): Promise<Staff | undefined>;
@@ -78,4 +97,10 @@ export type Store = {
   listFlags(patientId: string, sessionId: string): Promise<Flag[]>;
   putReport(report: SessionReport): Promise<void>;
   getReport(sessionId: string): Promise<SessionReport | undefined>;
+  getPublicData(kind: PublicDataKind, query: string): Promise<PublicDataEntry | undefined>;
+  putPublicData(entry: PublicDataEntry): Promise<void>;
+  createSuggestion(suggestion: Suggestion): Promise<boolean>;
+  getSuggestion(patientId: string, suggestionId: string): Promise<Suggestion | undefined>;
+  listSuggestions(patientId: string): Promise<Suggestion[]>;
+  decideSuggestion(patientId: string, suggestionId: string, decision: SuggestionDecision): Promise<Suggestion | undefined>;
 };

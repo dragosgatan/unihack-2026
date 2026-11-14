@@ -6,6 +6,7 @@ import { memoryHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
 import { sessionFlowSuite } from './session-flow.ts';
 import { storeSuite } from './store.ts';
+import { suggestionsSuite } from './suggestions.ts';
 
 describe('memory store', () => {
   describe('store', () => storeSuite(() => createMemoryStore()));
@@ -13,4 +14,5 @@ describe('memory store', () => {
   describe('access', () => accessSuite(memoryHarness));
   describe('sessions', () => sessionFlowSuite(memoryHarness));
   describe('pairing', () => pairingSuite(memoryHarness));
+  describe('suggestions', () => suggestionsSuite(memoryHarness));
 });

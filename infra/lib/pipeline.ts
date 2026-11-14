@@ -20,6 +20,7 @@ export const pipelineSteps = [
   { id: 'AiItems', file: 'ai-items', usesAi: true },
   { id: 'Compare', file: 'compare', usesAi: false },
   { id: 'DetectChange', file: 'detect-change', usesAi: false },
+  { id: 'Suggest', file: 'suggest', usesAi: true },
   { id: 'Report', file: 'report', usesAi: true },
   { id: 'Notify', file: 'notify', usesAi: false },
 ] as const;

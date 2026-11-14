@@ -1,0 +1,86 @@
+[
+  {
+    "code": "G20",
+    "label": "Parkinson's disease"
+  },
+  {
+    "code": "G20.A1",
+    "label": "Parkinson's disease without dyskinesia, without mention of fluctuations"
+  },
+  {
+    "code": "G20.A2",
+    "label": "Parkinson's disease without dyskinesia, with fluctuations"
+  },
+  {
+    "code": "G20.B1",
+    "label": "Parkinson's disease with dyskinesia, without mention of fluctuations"
+  },
+  {
+    "code": "G20.B2",
+    "label": "Parkinson's disease with dyskinesia, with fluctuations"
+  },
+  {
+    "code": "G20.C",
+    "label": "Parkinsonism, unspecified"
+  },
+  {
+    "code": "I63.9",
+    "label": "Cerebral infarction, unspecified"
+  },
+  {
+    "code": "I69.351",
+    "label": "Hemiplegia and hemiparesis following cerebral infarction affecting right dominant side"
+  },
+  {
+    "code": "I10",
+    "label": "Essential (primary) hypertension"
+  },
+  {
+    "code": "S83.511A",
+    "label": "Sprain of anterior cruciate ligament of right knee, initial encounter"
+  },
+  {
+    "code": "S83.512A",
+    "label": "Sprain of anterior cruciate ligament of left knee, initial encounter"
+  },
+  {
+    "code": "E11.9",
+    "label": "Type 2 diabetes mellitus without complications"
+  },
+  {
+    "code": "E78.5",
+    "label": "Hyperlipidemia, unspecified"
+  },
+  {
+    "code": "R26.81",
+    "label": "Unsteadiness on feet"
+  },
+  {
+    "code": "R41.0",
+    "label": "Disorientation, unspecified"
+  },
+  {
+    "code": "R25.1",
+    "label": "Tremor, unspecified"
+  },
+  {
+    "code": "M54.50",
+    "label": "Low back pain, unspecified"
+  },
+  {
+    "code": "F03.90",
+    "label": "Unspecified dementia, unspecified severity, without behavioral disturbance, psychotic disturbance, mood disturbance, and anxiety"
+  },
+  {
+    "code": "G30.9",
+    "label": "Alzheimer's disease, unspecified"
+  },
+  {
+    "code": "S06.0X0A",
+    "label": "Concussion without loss of consciousness, initial encounter"
+  },
+  {
+    "code": "Z96.651",
+    "label": "Presence of right artificial knee joint"
+  }
+]

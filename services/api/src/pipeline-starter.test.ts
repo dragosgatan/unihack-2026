@@ -7,6 +7,7 @@ import { buildSeed, demoSessionCodes } from './mock/seed/build.ts';
 import { mockStaffTokens } from './mock/seed/institution.ts';
 import { call, fingerTappingSubmission, fixedNow } from './mock/testing.ts';
 import { createStepFunctionsStarter } from './pipeline-starter.ts';
+import { offlinePublicData } from './public-data/index.ts';
 import { createMemoryStore } from './store/memory.ts';
 
 const stateMachineArn = 'arn:aws:states:eu-central-1:123456789012:stateMachine:pipeline';
@@ -52,6 +53,7 @@ describe('session submit', () => {
       startPipeline: async () => {
         throw new Error('state machine unavailable');
       },
+      publicData: offlinePublicData,
       demoSessionCodes,
     });
     const redeemed = routes.redeemSessionCode.response.parse(

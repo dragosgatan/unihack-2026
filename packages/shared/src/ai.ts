@@ -67,7 +67,11 @@ export const episodeDraftSchema = z.object({
   circumstances: z.string().min(1),
 });
 
-export type AiProviderName = z.infer<typeof aiProviderNameSchema>;
+export const suggestionDraftSchema = z.object({
+  text: z.string().min(1).max(600),
+});
+
+export type AiProviderName =z.infer<typeof aiProviderNameSchema>;
 export type AiMeta = z.infer<typeof aiMetaSchema>;
 export type AiOutput<Output> = { output: Output; meta: AiMeta };
 export type ClockCriterionScore = z.infer<typeof clockCriterionScoreSchema>;
@@ -76,3 +80,4 @@ export type SpeechTranscript = z.infer<typeof speechTranscriptSchema>;
 export type SessionSummary = z.infer<typeof sessionSummarySchema>;
 export type RecordDraft = z.infer<typeof recordDraftSchema>;
 export type EpisodeDraft = z.infer<typeof episodeDraftSchema>;
+export type SuggestionDraft = z.infer<typeof suggestionDraftSchema>;

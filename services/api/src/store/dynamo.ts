@@ -27,6 +27,7 @@ import {
   sideSchema,
   skipEventSchema,
   staffSchema,
+  suggestionSchema,
   type MetricPoint,
   type Session,
 } from '@tempo/shared';
@@ -51,6 +52,7 @@ import {
   planVersionKey,
   pointKey,
   pointPrefix,
+  publicDataKey,
   recordKey,
   reportKey,
   resultKey,
@@ -63,10 +65,13 @@ import {
   skipRange,
   staffIndexKey,
   staffKey,
+  suggestionKey,
+  suggestionPrefix,
   type Key,
 } from './keys.ts';
 import { storedResults, storedSkips } from './submission.ts';
-import type { CodeEntry, MetricValue, Store } from './types.ts';
+import { newestFirst } from './suggestions.ts';
+import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
 
 type Item = Record<string, unknown>;
 type WriteRequests = NonNullable<BatchWriteCommandInput['RequestItems']>[string];
@@ -85,6 +90,14 @@ const codeEntrySchema = z.discriminatedUnion('kind', [
   z.object({ ...codeFields, kind: z.literal('session'), sessionId: z.string().min(1) }),
   z.object({ ...codeFields, kind: z.literal('pairing'), patientId: z.string().min(1) }),
 ]);
+
+const publicDataEntrySchema = z.object({
+  kind: z.enum(['rxnorm', 'icd10', 'openfda-label']),
+  query: z.string(),
+  fetchedAt: isoDateTimeSchema,
+  keepUntil: isoDateTimeSchema,
+  value: z.unknown(),
+});
 
 const batchSize = 25;
 const codeTtlGraceSeconds = 60 * 60;
@@ -458,6 +471,75 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
     getReport: async (sessionId) => {
       const item = await get(reportKey(sessionId));
       return item && sessionReportSchema.parse(dataOf(item));
+    },
+
+    getPublicData: async (kind, query): Promise<PublicDataEntry | undefined> => {
+      const parsed = publicDataEntrySchema.safeParse(dataOf(await get(publicDataKey(kind, query))));
+      return parsed.success ? parsed.data : undefined;
+    },
+
+    putPublicData: (entry) =>
+      put({
+        ...publicDataKey(entry.kind, entry.query),
+        ttl: Math.floor(Date.parse(entry.keepUntil) / 1000),
+        data: entry,
+      }),
+
+    createSuggestion: async (suggestion) => {
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { ...suggestionKey(suggestion.patientId, suggestion.id), data: suggestion },
+            ConditionExpression: 'attribute_not_exists(pk)',
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    getSuggestion: async (patientId, suggestionId) => {
+      const item = await get(suggestionKey(patientId, suggestionId));
+      return item && suggestionSchema.parse(dataOf(item));
+    },
+
+    listSuggestions: async (patientId) =>
+      (await queryPrefix(patientPk(patientId), suggestionPrefix))
+        .map((item) => suggestionSchema.parse(dataOf(item)))
+        .sort(newestFirst),
+
+    decideSuggestion: async (patientId, suggestionId, { status, editedText, decidedBy, decidedAt }) => {
+      const set = ['#data.#status = :status', '#data.#decidedBy = :by', '#data.#decidedAt = :at'];
+      const edited = editedText === undefined ? {} : { ':text': editedText };
+      try {
+        const result = await client.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: suggestionKey(patientId, suggestionId),
+            UpdateExpression:
+              editedText === undefined
+                ? `SET ${set.join(', ')} REMOVE #data.#editedText`
+                : `SET ${[...set, '#data.#editedText = :text'].join(', ')}`,
+            ConditionExpression: 'attribute_exists(pk)',
+            ExpressionAttributeNames: {
+              ...dataName,
+              '#status': 'status',
+              '#decidedBy': 'decidedBy',
+              '#decidedAt': 'decidedAt',
+              '#editedText': 'editedText',
+            },
+            ExpressionAttributeValues: { ':status': status, ':by': decidedBy, ':at': decidedAt, ...edited },
+            ReturnValues: 'ALL_NEW',
+          }),
+        );
+        return suggestionSchema.parse(dataOf(result.Attributes));
+      } catch (error) {
+        if (isConditionFailure(error)) return undefined;
+        throw error;
+      }
     },
   };
 };

@@ -1,8 +1,8 @@
-import type { Institution, MedicalRecord, Patient, Session, SessionPlan, Staff } from '@tempo/shared';
+import type { Institution, MedicalRecord, Patient, Session, SessionPlan, Staff, Suggestion } from '@tempo/shared';
 import { aclPatientId, buildAclPatient } from './acl.ts';
 import type { MetricValue } from '../../store/types.ts';
 import { admin, attending, institution, therapist } from './institution.ts';
-import { buildParkinsonsPatient, parkinsonsPatientId } from './parkinsons.ts';
+import { buildParkinsonsPatient, buildParkinsonsSuggestion, parkinsonsPatientId } from './parkinsons.ts';
 import { buildStrokePatient, strokePatientId } from './stroke.ts';
 
 export type Seed = {
@@ -13,6 +13,7 @@ export type Seed = {
   plans: SessionPlan[];
   sessions: Session[];
   metricValues: MetricValue[];
+  suggestions: Suggestion[];
 };
 
 export const demoSessionCodes: ReadonlyMap<string, string> = new Map([
@@ -22,7 +23,8 @@ export const demoSessionCodes: ReadonlyMap<string, string> = new Map([
 ]);
 
 export const buildSeed = (now: Date): Seed => {
-  const patientSeeds = [buildParkinsonsPatient(now), buildStrokePatient(now), buildAclPatient(now)];
+  const parkinsons = buildParkinsonsPatient(now);
+  const patientSeeds = [parkinsons, buildStrokePatient(now), buildAclPatient(now)];
   return {
     institution,
     staff: [admin, attending, therapist],
@@ -31,5 +33,6 @@ export const buildSeed = (now: Date): Seed => {
     plans: patientSeeds.map((seed) => seed.plan),
     sessions: patientSeeds.flatMap((seed) => seed.sessions),
     metricValues: patientSeeds.flatMap((seed) => seed.metricValues),
+    suggestions: [buildParkinsonsSuggestion(now, parkinsons)],
   };
 };

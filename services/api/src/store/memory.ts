@@ -11,11 +11,13 @@ import type {
   SessionReport,
   Side,
   Staff,
+  Suggestion,
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
 import { keyOfFlag } from './keys.ts';
 import { storedResults, storedSkips, type StoredSkip } from './submission.ts';
-import type { CodeEntry, MetricValue, Store } from './types.ts';
+import { newestFirst, withDecision } from './suggestions.ts';
+import type { CodeEntry, MetricValue, PublicDataEntry, Store } from './types.ts';
 
 const seriesKey = (patientId: string, metricId: string, side: Side | undefined): string =>
   `${patientId}|${metricId}|${side ?? 'none'}`;
@@ -48,6 +50,8 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const flags = new Map<string, Flag>();
   const reports = new Map<string, SessionReport>();
   const painAlerts = new Set<string>();
+  const publicData = new Map<string, PublicDataEntry>();
+  const suggestions = new Map<string, Suggestion>();
 
   const addMetricValues = (values: MetricValue[]): void => {
     for (const value of values) {
@@ -67,6 +71,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
     for (const plan of seed.plans) plans.set(plan.patientId, plan);
     for (const session of seed.sessions) sessions.set(session.id, session);
     addMetricValues(seed.metricValues);
+    for (const suggestion of seed.suggestions) suggestions.set(`${suggestion.patientId}|${suggestion.id}`, suggestion);
   }
 
   return {
@@ -239,5 +244,34 @@ export const createMemoryStore = (seed?: Seed): Store => {
     },
 
     getReport: async (sessionId) => reports.get(sessionId),
+
+    getPublicData: async (kind, query) => publicData.get(`${kind}|${query}`),
+
+    putPublicData: async (entry) => {
+      publicData.set(`${entry.kind}|${entry.query}`, entry);
+    },
+
+    createSuggestion: async (suggestion) => {
+      const key = `${suggestion.patientId}|${suggestion.id}`;
+      if (suggestions.has(key)) return false;
+      suggestions.set(key, suggestion);
+      return true;
+    },
+
+    getSuggestion: async (patientId, suggestionId) => suggestions.get(`${patientId}|${suggestionId}`),
+
+    listSuggestions: async (patientId) =>
+      [...suggestions.values()]
+        .filter((suggestion) => suggestion.patientId === patientId)
+        .sort(newestFirst),
+
+    decideSuggestion: async (patientId, suggestionId, decision) => {
+      const key = `${patientId}|${suggestionId}`;
+      const current = suggestions.get(key);
+      if (!current) return undefined;
+      const decided = withDecision(current, decision);
+      suggestions.set(key, decided);
+      return decided;
+    },
   };
 };

@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "esbuild src/handlers/score.ts src/handlers/ai-items.ts src/handlers/compare.ts src/handlers/detect-change.ts src/handlers/report.ts src/handlers/notify.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --out-extension:.js=.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "build": "esbuild src/handlers/score.ts src/handlers/ai-items.ts src/handlers/compare.ts src/handlers/detect-change.ts src/handlers/suggest.ts src/handlers/report.ts src/handlers/notify.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --out-extension:.js=.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

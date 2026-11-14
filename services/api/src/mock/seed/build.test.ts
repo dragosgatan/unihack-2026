@@ -7,13 +7,15 @@ import {
   sessionPlanSchema,
   sessionSchema,
   staffSchema,
+  suggestionSchema,
   type MetricId,
   type Side,
 } from '@tempo/shared';
+import { fallbackLabel } from '../../public-data/fallback.ts';
 import { fixedNow } from '../testing.ts';
 import { aclPatientId } from './acl.ts';
 import { buildSeed } from './build.ts';
-import { parkinsonsPatientId } from './parkinsons.ts';
+import { parkinsonsPatientId, parkinsonsSuggestionTerms } from './parkinsons.ts';
 import { strokePatientId } from './stroke.ts';
 
 const seed = buildSeed(fixedNow);
@@ -109,5 +111,23 @@ describe('buildSeed', () => {
     const symmetry = valuesOf(aclPatientId, 'single-leg-squat.symmetry');
     expect(mean(symmetry.slice(0, 3))).toBeLessThan(68);
     expect(mean(symmetry.slice(-3))).toBeGreaterThan(86);
+  });
+
+  it('gives the Parkinson patient one proposed suggestion whose evidence is in the seed and the bundled label', () => {
+    expect(seed.suggestions).toHaveLength(1);
+    const [suggestion] = seed.suggestions;
+    expect(suggestionSchema.safeParse(suggestion).error).toBeUndefined();
+    expect(suggestion).toMatchObject({ patientId: parkinsonsPatientId, kind: 'review', status: 'proposed' });
+    const [metric, medication, label] = suggestion?.evidence ?? [];
+    const session = seed.sessions.find((candidate) => candidate.id === metric?.sessionId);
+    expect(session?.patientId).toBe(parkinsonsPatientId);
+    expect(seed.metricValues).toContainEqual(
+      expect.objectContaining({ sessionId: session?.id, metricId: 'trail-making-a.time', t: metric?.t }),
+    );
+    const record = seed.records.find((candidate) => candidate.patientId === parkinsonsPatientId);
+    expect(record?.timeline.some((event) => event.type === 'medication-change' && event.t.slice(0, 10) === medication?.t?.slice(0, 10))).toBe(true);
+    const bundled = fallbackLabel({ name: 'Levodopa/Carbidopa', rxnormId: '197444' });
+    expect(label?.sourceUrl).toBe(bundled?.sourceUrl);
+    for (const term of parkinsonsSuggestionTerms) expect(bundled?.adverseReactions.toLowerCase()).toContain(term);
   });
 });

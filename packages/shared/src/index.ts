@@ -15,3 +15,4 @@ export * from './baseline.ts';
 export * from './flag.ts';
 export * from './report.ts';
 export * from './body.ts';
+export * from './lookup.ts';

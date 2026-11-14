@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import { aiFromEnv, createPipelineAi, logEmail, runPipeline } from '@tempo/pipeline';
 import { createMockStaffAuth } from '../auth/staff.ts';
 import { createApp } from '../create-app.ts';
+import { offlinePublicData } from '../public-data/index.ts';
 import { createMemoryStore } from '../store/memory.ts';
 import type { Store } from '../store/types.ts';
 import { buildSeed, demoSessionCodes, type Seed } from './seed/build.ts';
@@ -14,7 +15,14 @@ export type MockAppOptions = { clock?: () => Date; seed?: Seed; store?: Store };
 
 export const createMockApp = ({ clock = () => new Date(), seed, store: given }: MockAppOptions = {}): Hono => {
   const store = given ?? createMemoryStore(seed ?? buildSeed(clock()));
-  const pipeline = { store, ai: createPipelineAi(aiFromEnv()), sendEmail: logEmail, clock, appUrl: mockAppUrl };
+  const pipeline = {
+    store,
+    ai: createPipelineAi(aiFromEnv()),
+    publicData: offlinePublicData,
+    sendEmail: logEmail,
+    clock,
+    appUrl: mockAppUrl,
+  };
   return createApp({
     store,
     staffAuth: createMockStaffAuth(store, mockStaffTokens),
@@ -23,6 +31,7 @@ export const createMockApp = ({ clock = () => new Date(), seed, store: given }: 
     startPipeline: async (sessionId) => {
       await runPipeline(pipeline, { sessionId });
     },
+    publicData: offlinePublicData,
     demoSessionCodes,
   });
 };

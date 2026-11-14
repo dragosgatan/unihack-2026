@@ -6,6 +6,7 @@ import { dynamoHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
 import { sessionFlowSuite } from './session-flow.ts';
 import { storeSuite } from './store.ts';
+import { suggestionsSuite } from './suggestions.ts';
 
 const tableName = process.env['TEMPO_TEST_TABLE'];
 
@@ -18,6 +19,7 @@ if (tableName) {
     describe('access', () => accessSuite(harness));
     describe('sessions', () => sessionFlowSuite(harness));
     describe('pairing', () => pairingSuite(harness));
+    describe('suggestions', () => suggestionsSuite(harness));
   });
 } else {
   describe('DynamoDB store', () => {

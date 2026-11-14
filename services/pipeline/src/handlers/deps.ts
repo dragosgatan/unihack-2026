@@ -1,3 +1,4 @@
+import { createPublicData } from '@tempo/api/public-data';
 import { createDynamoStore } from '@tempo/api/store';
 import { aiFromEnv } from '../ai/index.ts';
 import { createPipelineAi, type PipelineAi } from '../ai-port.ts';
@@ -20,12 +21,16 @@ const aiOnFirstUse = (): PipelineAi => {
   return {
     summarizeSession: (input) => get().summarizeSession(input),
     scoreItem: (input) => get().scoreItem(input),
+    suggestReview: (input) => get().suggestReview(input),
   };
 };
 
+const store = createDynamoStore({ tableName: requiredEnv('TABLE_NAME') });
+
 export const deps: PipelineDeps = {
-  store: createDynamoStore({ tableName: requiredEnv('TABLE_NAME') }),
+  store,
   ai: aiOnFirstUse(),
+  publicData: createPublicData({ fetch, clock, cache: store }),
   sendEmail: sender ? createSesEmail(sender) : logEmail,
   clock,
   appUrl: requiredEnv('APP_URL'),

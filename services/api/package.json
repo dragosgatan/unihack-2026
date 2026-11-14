@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./store": "./src/store/index.ts"
+    "./store": "./src/store/index.ts",
+    "./public-data": "./src/public-data/index.ts"
   },
   "engines": {
     "node": ">=22"
