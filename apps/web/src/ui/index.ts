@@ -17,3 +17,4 @@ export { MetricRangeControl, type MetricRangeControlProps } from './chart/Metric
 export { inDomain, latestTime, timeDomain, type TimeDomain } from './chart/scale.ts';
 export { edgeInset, plotXScale, yLabelGutter, type PlotXScale } from './chart/plotScale.ts';
 export { useContainerWidth } from './chart/useContainerWidth.ts';
+export { QrCode, type QrCodeProps } from './QrCode.tsx';

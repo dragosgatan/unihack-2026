@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import {
@@ -9,6 +9,7 @@ import {
   type Flag,
   type MeResponse,
   type MetricSeries,
+  type PairedDevice,
   type PatientDetailResponse,
   type PatientListResponse,
   type PatientMetricsResponse,
@@ -837,6 +838,113 @@ describe('suggestions', () => {
     expect(within(editedCard).getByText('Original from Tempo AI')).toBeTruthy();
     expect(within(editedCard).getByText(proposed.text)).toBeTruthy();
     expect(screen.getByRole('link', { name: patient.name }).getAttribute('href')).toBe(`/clinician/patients/${patient.id}`);
+  });
+});
+
+const devicesPath = `/api/patients/${patient.id}/devices`;
+const pairingPath = `/api/patients/${patient.id}/pairing-codes`;
+const tenMinutes = 10 * 60 * 1000;
+
+const pairedPhone: PairedDevice = { id: 'dev-1', patientId: patient.id, label: 'Ana’s phone', pairedAt: '2026-11-01T10:00:00.000Z' };
+
+function issuedCode() {
+  return json({ code: '482913', expiresAt: new Date(Date.now() + tenMinutes).toISOString() });
+}
+
+function postsTo(fetchMock: ReturnType<typeof stubApi>, path: string) {
+  return fetchMock.mock.calls.filter(([input, init]) => String(input) === path && init?.method === 'POST');
+}
+
+describe('pair a phone', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows how many phones are paired on the patient screen and links to the view', async () => {
+    stubApi({ [devicesPath]: () => json({ devices: [pairedPhone] }) });
+    renderAt(`/clinician/patients/${patient.id}`);
+    const row = await screen.findByRole('link', { name: /Home phone.*1 phone paired/ });
+    expect(row.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/devices`);
+  });
+
+  it('creates a code only on tap and shows the QR, the code and its expiry', async () => {
+    const fetchMock = stubApi({ [devicesPath]: () => json({ devices: [] }), [pairingPath]: issuedCode });
+    renderAt(`/clinician/patients/${patient.id}/devices`);
+
+    expect(await screen.findByText('No phones paired yet')).toBeTruthy();
+    expect(postsTo(fetchMock, pairingPath)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Pair a phone' }));
+
+    expect(await screen.findByRole('img', { name: /QR code/ })).toBeTruthy();
+    expect(screen.getByText('Pairing code 4 8 2 9 1 3')).toBeTruthy();
+    expect(screen.getByText('482')).toBeTruthy();
+    expect(screen.getByText('913')).toBeTruthy();
+    expect(screen.getByText(/^Valid until \d{2}:\d{2}$/)).toBeTruthy();
+    expect(postsTo(fetchMock, pairingPath)).toHaveLength(1);
+  });
+
+  it('replaces an expired code with New code', async () => {
+    const fetchMock = stubApi({ [devicesPath]: () => json({ devices: [] }), [pairingPath]: issuedCode });
+    renderAt(`/clinician/patients/${patient.id}/devices`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone' }));
+    await screen.findByRole('img', { name: /QR code/ });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(tenMinutes + 15_000);
+    });
+
+    expect(screen.getByText('This code has expired')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /QR code/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New code' }));
+    expect(await screen.findByRole('img', { name: /QR code/ })).toBeTruthy();
+    expect(postsTo(fetchMock, pairingPath)).toHaveLength(2);
+  });
+
+  it('shows Phone paired when a new phone appears while the code is shown', async () => {
+    let devices: PairedDevice[] = [];
+    stubApi({
+      [devicesPath]: () => json({ devices }),
+      [pairingPath]: () => {
+        const response = issuedCode();
+        devices = [{ id: 'dev-2', patientId: patient.id, label: 'Kitchen phone', pairedAt: new Date(Date.now() + 1000).toISOString() }];
+        return response;
+      },
+    });
+    renderAt(`/clinician/patients/${patient.id}/devices`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Pair a phone' }));
+    await screen.findByRole('img', { name: /QR code/ });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(await screen.findByText('Phone paired')).toBeTruthy();
+    expect(screen.getByText(/Kitchen phone · paired/)).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /QR code/ })).toBeNull();
+  });
+
+  it('removes a phone after confirming in the sheet', async () => {
+    const revokePath = `${devicesPath}/${pairedPhone.id}/revoke`;
+    const fetchMock = stubApi({
+      [devicesPath]: () => json({ devices: [pairedPhone] }),
+      [revokePath]: () => json({ device: { ...pairedPhone, revokedAt: '2026-11-14T12:00:00.000Z', revokedBy: me.id } }),
+    });
+    renderAt(`/clinician/patients/${patient.id}/devices`);
+
+    fireEvent.click(await screen.findByRole('button', { name: `Remove ${pairedPhone.label}` }));
+    const sheet = await screen.findByRole('dialog', { name: 'Remove phone' });
+    expect(within(sheet).getByText(/will stop syncing/)).toBeTruthy();
+    expect(postsTo(fetchMock, revokePath)).toHaveLength(0);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Remove phone' }));
+
+    expect(await screen.findByText('Revoked 14 Nov 2026')).toBeTruthy();
+    expect(postsTo(fetchMock, revokePath)).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: `Remove ${pairedPhone.label}` })).toBeNull();
   });
 });
 

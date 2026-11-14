@@ -2,11 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router';
 import type { AffectedLimb, MedicalRecord, PatientDetailResponse, PatientMetric } from '@tempo/shared';
 import { Card, EmptyState, GroupedList, GroupedListRow, LargeTitle, MiniChart } from '../ui/index.ts';
-import { useMetricSeries, usePatient, usePatientFlags, usePatientMetrics, usePatientSessions } from './api.ts';
+import { useMetricSeries, usePatient, usePatientDevices, usePatientFlags, usePatientMetrics, usePatientSessions } from './api.ts';
 import { isCheckInMetric } from './checkIn.ts';
 import { Highlights } from './Highlights.tsx';
 import { ageFrom, formatNumber, formatShortDate, formatUnit, profileLabels, sexLabels } from './format.ts';
 import { metricNames } from './metricNames.ts';
+import { pairedCountLabel } from './pairing.ts';
 import { SessionListRow } from './SessionListRow.tsx';
 import { sessionsWithSkips } from './sessionSummary.ts';
 import { LoadError, LoadingSkeleton } from './states.tsx';
@@ -55,6 +56,20 @@ function PatientHeader({ detail }: { detail: PatientDetailResponse }) {
         </div>
       )}
     </Card>
+  );
+}
+
+function HomePhoneRow({ patientId }: { patientId: string }) {
+  const devices = usePatientDevices(patientId);
+  return (
+    <GroupedList className="mt-3">
+      <GroupedListRow
+        title="Home phone"
+        value={devices.isSuccess ? pairedCountLabel(devices.data.devices) : undefined}
+        chevron
+        href={`/clinician/patients/${patientId}/devices`}
+      />
+    </GroupedList>
   );
 }
 
@@ -213,6 +228,7 @@ function PatientBody({ patientId }: { patientId: string }) {
           <>
             <div className="max-w-3xl">
               <PatientHeader detail={patient.data} />
+              <HomePhoneRow patientId={patientId} />
             </div>
             <section className="flex flex-col gap-2">
               <h2 className="text-title-3 font-semibold">Pinned</h2>

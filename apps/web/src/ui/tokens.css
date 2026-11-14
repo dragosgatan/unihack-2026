@@ -50,6 +50,9 @@
   --ui-bar: rgb(249 249 249 / 0.78);
   --ui-bar-solid: #f9f9f9;
 
+  --ui-qr-tile: #ffffff;
+  --ui-qr-module: #000000;
+
   --ui-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.03);
   --ui-shadow-sheet: 0 -2px 10px rgb(0 0 0 / 0.06), 0 -12px 40px rgb(0 0 0 / 0.12);
 
@@ -153,6 +156,9 @@
 
   --color-bar: var(--ui-bar);
   --color-bar-solid: var(--ui-bar-solid);
+
+  --color-qr-tile: var(--ui-qr-tile);
+  --color-qr-module: var(--ui-qr-module);
 
   --shadow-card: var(--ui-shadow-card);
   --shadow-sheet: var(--ui-shadow-sheet);

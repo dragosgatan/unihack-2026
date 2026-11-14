@@ -65,3 +65,9 @@ export function normalizeForSearch(text: string): string {
 export function defaultSide(record: MedicalRecord): Side {
   return record.injury?.side ?? record.affectedLimbs[0]?.side ?? record.dominantHand;
 }
+
+const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+export function formatTime(iso: string): string {
+  return time.format(new Date(iso));
+}

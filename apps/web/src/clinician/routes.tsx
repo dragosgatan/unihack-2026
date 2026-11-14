@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router';
 import { Browse, BrowseDomain, BrowseMetric } from './Browse.tsx';
 import { CheckIn } from './CheckIn.tsx';
 import { MetricDetail } from './MetricDetail.tsx';
+import { PairPhone } from './PairPhone.tsx';
 import { PatientScreen } from './PatientScreen.tsx';
 import { SessionSummary } from './SessionSummary.tsx';
 import { Sessions } from './Sessions.tsx';
@@ -26,6 +27,7 @@ export function ClinicianRoutes() {
         <Route path="patients/:patientId/sessions" element={<Sessions />} />
         <Route path="patients/:patientId/sessions/:sessionId" element={<SessionSummary />} />
         <Route path="patients/:patientId/suggestions" element={<SuggestionsHistory />} />
+        <Route path="patients/:patientId/devices" element={<PairPhone />} />
         <Route path="browse" element={<Browse />} />
         <Route path="browse/:domain" element={<BrowseDomain />} />
         <Route path="browse/:domain/:metricId" element={<BrowseMetric />} />

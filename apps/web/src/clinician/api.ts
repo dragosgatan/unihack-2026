@@ -4,6 +4,7 @@ import {
   routes,
   type MetricId,
   type MetricRange,
+  type DeviceListResponse,
   type RouteName,
   type Side,
   type SuggestionDecisionRequest,
@@ -97,12 +98,14 @@ export const queryKeys = {
   patientFlags: (patientId: string) => ['patients', patientId, 'flags'] as const,
   patientSessions: (patientId: string) => ['patients', patientId, 'sessions'] as const,
   patientSuggestions: (patientId: string) => ['patients', patientId, 'suggestions'] as const,
+  patientDevices: (patientId: string) => ['patients', patientId, 'devices'] as const,
   metricSeries: (patientId: string, metricId: MetricId, range: MetricRange, side: Side | undefined) =>
     ['patients', patientId, 'metrics', metricId, range, side ?? null] as const,
 };
 
 interface ApiQueryOptions {
   placeholderData?: typeof keepPreviousData;
+  refetchInterval?: number | false;
 }
 
 async function withSignedIn<T>(queryClient: QueryClient, request: (token: string) => Promise<T>): Promise<T> {
@@ -159,6 +162,29 @@ export function usePatientSessions(patientId: string) {
 
 export function usePatientSuggestions(patientId: string) {
   return useApiQuery(queryKeys.patientSuggestions(patientId), 'listSuggestions', { params: { patientId } });
+}
+
+export function usePatientDevices(patientId: string, refetchInterval: number | false = false) {
+  return useApiQuery(queryKeys.patientDevices(patientId), 'listDevices', { params: { patientId } }, { refetchInterval });
+}
+
+export function useCreatePairingCode(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => postSignedIn(queryClient, 'createPairingCode', { params: { patientId } }),
+  });
+}
+
+export function useRevokeDevice(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId: string) => postSignedIn(queryClient, 'revokeDevice', { params: { patientId, deviceId } }),
+    onSuccess: ({ device }) => {
+      queryClient.setQueryData<DeviceListResponse>(queryKeys.patientDevices(patientId), (current) =>
+        current ? { devices: current.devices.map((existing) => (existing.id === device.id ? device : existing)) } : current,
+      );
+    },
+  });
 }
 
 export interface SuggestionDecision {
