@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router';
-import { metricIds, type MeResponse, type PatientDetailResponse, type PatientListResponse, type PatientMetricsResponse } from '@tempo/shared';
-import { attending, medicalRecord, patient } from '../../../../packages/shared/src/test-fixtures.ts';
+import { activityIds, metricDefinitions, metricIds, type MeResponse, type MetricSeries, type PatientDetailResponse, type PatientListResponse, type PatientMetricsResponse } from '@tempo/shared';
+import { attending, medicalRecord, patient, tapsPerSecondSeries } from '../../../../packages/shared/src/test-fixtures.ts';
 import { routes } from '../routes.tsx';
+import { aboutTests } from './aboutTests.ts';
 import { getToken, setToken } from './auth.ts';
 import { metricDomains } from './domains.ts';
 import { metricNames } from './metricNames.ts';
@@ -58,7 +59,7 @@ function stubApi(overrides: Record<string, Handler> = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const authorization = new Headers(init?.headers).get('Authorization');
-    const handler = handlers[url];
+    const handler = handlers[url] ?? handlers[url.split('?')[0] ?? url];
     return handler ? handler(authorization) : json({ error: { code: 'not_found', message: 'Not found' } }, 404);
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -144,9 +145,9 @@ describe('clinician screens', () => {
     expect(await screen.findByRole('heading', { level: 1, name: patient.name })).toBeTruthy();
     const pinned = (await screen.findByRole('heading', { level: 2, name: 'Pinned' })).closest('section');
     if (!pinned) throw new Error('Pinned section missing');
-    expect(await within(pinned).findByRole('heading', { level: 3, name: metricNames['finger-tapping.taps-per-second'] })).toBeTruthy();
-    expect(within(pinned).getByRole('heading', { level: 3, name: metricNames['pain.intensity'] })).toBeTruthy();
-    expect(within(pinned).getByText('No data yet')).toBeTruthy();
+    const tapping = await within(pinned).findByRole('link', { name: new RegExp(metricNames['finger-tapping.taps-per-second']) });
+    expect(tapping.getAttribute('href')).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    expect(within(pinned).getByRole('link', { name: new RegExp(metricNames['pain.intensity']) }).textContent).toContain('No data yet');
   });
 
   it('shows Try again when the patient list fails and refetches on tap', async () => {
@@ -159,7 +160,136 @@ describe('clinician screens', () => {
   });
 });
 
+const tappingPath = `/api/patients/${patient.id}/metrics/finger-tapping.taps-per-second`;
+const painPath = `/api/patients/${patient.id}/metrics/pain.intensity`;
+const tappingName = metricNames['finger-tapping.taps-per-second'];
+
+function seriesCalls(fetchMock: ReturnType<typeof stubApi>, path: string): URLSearchParams[] {
+  return fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((url) => url.startsWith(`${path}?`))
+    .map((url) => new URLSearchParams(url.slice(url.indexOf('?') + 1)));
+}
+
+function sessionsSection(): HTMLElement {
+  const section = screen.getByRole('heading', { level: 2, name: 'Sessions' }).closest('section');
+  if (!section) throw new Error('Sessions section missing');
+  return section;
+}
+
+describe('metric detail', () => {
+  beforeEach(() => {
+    setToken('mock-attending');
+  });
+
+  it('opens from a pinned card and shows the chart, About this test and back to the patient', async () => {
+    stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    const router = renderAt(`/clinician/patients/${patient.id}`);
+
+    fireEvent.click(await screen.findByRole('link', { name: new RegExp(tappingName) }));
+
+    expect(await screen.findByRole('heading', { level: 1, name: tappingName })).toBeTruthy();
+    expect(router.state.location.pathname).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    expect(await screen.findByRole('heading', { level: 3, name: tappingName })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: 'About this test' })).toBeTruthy();
+    expect(screen.getByText('Higher values mean faster tapping.')).toBeTruthy();
+    expect((await screen.findByRole('link', { name: patient.name })).getAttribute('href')).toBe(`/clinician/patients/${patient.id}`);
+  });
+
+  it('requests the chosen range and keeps it in the URL', async () => {
+    const fetchMock = stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    const router = renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    await screen.findByRole('heading', { level: 3, name: tappingName });
+    expect(seriesCalls(fetchMock, tappingPath)[0]?.get('range')).toBe('M');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'W' }));
+
+    await waitFor(() => expect(seriesCalls(fetchMock, tappingPath).some((query) => query.get('range') === 'W')).toBe(true));
+    expect(new URLSearchParams(router.state.location.search).get('range')).toBe('W');
+  });
+
+  it('passes the default side for a lateral metric and switches side', async () => {
+    const fetchMock = stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    await screen.findByRole('heading', { level: 3, name: tappingName });
+    expect(seriesCalls(fetchMock, tappingPath)[0]?.get('side')).toBe('right');
+
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Side' })).getByRole('radio', { name: 'Left' }));
+
+    await waitFor(() => expect(seriesCalls(fetchMock, tappingPath).some((query) => query.get('side') === 'left')).toBe(true));
+  });
+
+  it('sends no side and shows no side control for a non-lateral metric', async () => {
+    const painSeries: MetricSeries = { metricId: 'pain.intensity', unit: '0-10', points: [{ t: '2026-11-10T10:00:00.000Z', value: 3 }], baseline: null, referenceBand: null, events: [] };
+    const fetchMock = stubApi({ [painPath]: () => json(painSeries) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/pain.intensity`);
+    await screen.findByRole('heading', { level: 3, name: metricNames['pain.intensity'] });
+    expect(seriesCalls(fetchMock, painPath)[0]?.has('side')).toBe(false);
+    expect(screen.queryByRole('radiogroup', { name: 'Side' })).toBeNull();
+    expect(within(sessionsSection()).getByText('3 / 10')).toBeTruthy();
+  });
+
+  it('lists a skipped session with reason and stage and no value, newest first', async () => {
+    stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    await screen.findByRole('heading', { level: 2, name: 'Sessions' });
+
+    const rows = within(sessionsSection()).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual(['13 Nov 20264.4 taps/s', '20 Oct 2026SkippedToo tiredStopped at practice', '15 Sept 20263.9 taps/s']);
+    expect(rows[1]?.textContent).not.toMatch(/taps\/s|\b0\b/);
+    expect(within(sessionsSection()).queryByText('Levodopa dose increased')).toBeNull();
+  });
+
+  it('shows the empty state when the range has no sessions', async () => {
+    stubApi({ [tappingPath]: () => json({ ...tapsPerSecondSeries, points: [], events: [] }) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+
+    expect(await screen.findByText('No sessions in this range')).toBeTruthy();
+    expect(screen.getByText('No data in this range')).toBeTruthy();
+  });
+
+  it('shows Try again when the series fails and refetches on tap', async () => {
+    let calls = 0;
+    stubApi({ [tappingPath]: () => (++calls === 1 ? json({ error: { code: 'internal', message: 'Boom' } }, 500) : json(tapsPerSecondSeries)) });
+    renderAt(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { level: 3, name: tappingName })).toBeTruthy();
+  });
+
+  it('shows Metric not found for an unknown metric', async () => {
+    stubApi();
+    renderAt(`/clinician/patients/${patient.id}/metrics/not-a-metric`);
+    expect(await screen.findByText('Metric not found')).toBeTruthy();
+  });
+
+  it('goes from Browse to a domain, a metric and a patient, and back to the picker', async () => {
+    stubApi({ [tappingPath]: () => json(tapsPerSecondSeries) });
+    const router = renderAt('/clinician/browse');
+
+    fireEvent.click(await screen.findByRole('link', { name: /Motor/ }));
+    fireEvent.click(await screen.findByRole('link', { name: new RegExp(tappingName) }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Choose a patient' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('link', { name: new RegExp(patient.name) }));
+
+    expect(await screen.findByRole('heading', { level: 3, name: tappingName })).toBeTruthy();
+    expect(router.state.location.pathname).toBe(`/clinician/patients/${patient.id}/metrics/finger-tapping.taps-per-second`);
+    expect(screen.getByText(patient.name)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back' }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Choose a patient' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/clinician/browse/motor/finger-tapping.taps-per-second');
+  });
+});
+
 describe('metric maps', () => {
+  it('describes every activity behind a metric', () => {
+    for (const metricId of metricIds) {
+      expect(aboutTests[metricDefinitions[metricId].activityId].summary).toBeTruthy();
+    }
+    expect(Object.keys(aboutTests).sort()).toEqual([...activityIds].sort());
+  });
+
   it('names every metric and puts each in a domain', () => {
     for (const metricId of metricIds) {
       expect(metricNames[metricId]).toBeTruthy();

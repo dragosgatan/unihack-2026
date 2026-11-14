@@ -25,6 +25,12 @@ export function formatShortDate(iso: string): string {
   return shortDate.format(new Date(iso));
 }
 
+const fullDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+export function formatDate(iso: string): string {
+  return fullDate.format(new Date(iso));
+}
+
 const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 
 export function formatNumber(value: number): string {

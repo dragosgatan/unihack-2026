@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiErrorSchema, routes, type RouteName } from '@tempo/shared';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiErrorSchema, routes, type MetricId, type MetricRange, type RouteName, type Side } from '@tempo/shared';
 import { getToken, signOut } from './auth.ts';
 
 type Routes = typeof routes;
@@ -60,11 +60,18 @@ export const queryKeys = {
   patients: ['patients'] as const,
   patient: (patientId: string) => ['patients', patientId] as const,
   patientMetrics: (patientId: string) => ['patients', patientId, 'metrics'] as const,
+  metricSeries: (patientId: string, metricId: MetricId, range: MetricRange, side: Side | undefined) =>
+    ['patients', patientId, 'metrics', metricId, range, side ?? null] as const,
 };
 
-function useApiQuery<N extends StaffGetRoute>(queryKey: readonly unknown[], name: N, input: RouteInput<N>) {
+interface ApiQueryOptions {
+  placeholderData?: typeof keepPreviousData;
+}
+
+function useApiQuery<N extends StaffGetRoute>(queryKey: readonly unknown[], name: N, input: RouteInput<N>, options: ApiQueryOptions = {}) {
   const queryClient = useQueryClient();
   return useQuery({
+    ...options,
     queryKey,
     queryFn: async () => {
       const token = getToken();
@@ -93,4 +100,13 @@ export function usePatient(patientId: string) {
 
 export function usePatientMetrics(patientId: string) {
   return useApiQuery(queryKeys.patientMetrics(patientId), 'listPatientMetrics', { params: { patientId } });
+}
+
+export function useMetricSeries(patientId: string, metricId: MetricId, range: MetricRange, side?: Side) {
+  return useApiQuery(
+    queryKeys.metricSeries(patientId, metricId, range, side),
+    'getMetricSeries',
+    { params: { patientId, metricId }, query: { range, side } },
+    { placeholderData: keepPreviousData },
+  );
 }

@@ -51,9 +51,9 @@ function PatientHeader({ detail }: { detail: PatientDetailResponse }) {
   );
 }
 
-function MetricCard({ metric }: { metric: PatientMetric }) {
+function MetricCard({ patientId, metric }: { patientId: string; metric: PatientMetric }) {
   return (
-    <Card title={metricNames[metric.metricId]}>
+    <Card title={metricNames[metric.metricId]} href={`/clinician/patients/${patientId}/metrics/${metric.metricId}`}>
       {metric.lastValue !== undefined ? (
         <>
           <p className="flex flex-wrap items-baseline gap-x-1">
@@ -81,7 +81,7 @@ function PinnedMetrics({ patientId }: { patientId: string }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
       {metrics.data.metrics.map((metric) => (
-        <MetricCard key={metric.metricId} metric={metric} />
+        <MetricCard key={metric.metricId} patientId={patientId} metric={metric} />
       ))}
     </div>
   );

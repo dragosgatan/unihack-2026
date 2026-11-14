@@ -503,25 +503,27 @@ export function MetricChart({ series, range, title, formatValue = defaultFormatV
           </g>
         </svg>
       </div>
-      <table className="sr-only">
-        <caption>{title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Date</th>
-            <th scope="col">Value</th>
-            <th scope="col">Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tableRows.map((row) => (
-            <tr key={row.key}>
-              <td>{dateFormat.format(row.t)}</td>
-              <td>{row.value}</td>
-              <td>{row.note}</td>
+      <div className="sr-only">
+        <table>
+          <caption>{title}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Value</th>
+              <th scope="col">Note</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {tableRows.map((row) => (
+              <tr key={row.key}>
+                <td>{dateFormat.format(row.t)}</td>
+                <td>{row.value}</td>
+                <td>{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
