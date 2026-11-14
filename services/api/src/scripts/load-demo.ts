@@ -105,7 +105,15 @@ for (const staff of seed.staff) {
 }
 
 for (const patient of seed.patients) await clearPartition(patientPk(patient.id));
-const loaded = await loadSeed(createDynamoStore({ tableName, client: documents }), seed, subs);
+const notifyEmail = process.env['DEMO_NOTIFY_EMAIL'];
+const delivered = notifyEmail
+  ? {
+      ...seed,
+      staff: seed.staff.map((staff) => (staff.role === 'attending' ? { ...staff, email: notifyEmail } : staff)),
+      patients: seed.patients.map((patient) => (patient.reminderEmail ? { ...patient, reminderEmail: notifyEmail } : patient)),
+    }
+  : seed;
+const loaded = await loadSeed(createDynamoStore({ tableName, client: documents }), delivered, subs);
 console.log(
   `Loaded ${loaded.patients.length} patients, ${loaded.sessions.length} sessions and ${loaded.metricValues.length} metric values into ${tableName}`,
 );

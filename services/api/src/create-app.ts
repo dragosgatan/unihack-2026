@@ -9,6 +9,7 @@ import {
   type AssistantTurnRecord,
   type AuditEntry,
   type CheckInEntry,
+  type MetricRange,
   type Patient,
   type RouteDefinition,
   type Session,
@@ -44,10 +45,11 @@ import type { ReportFileOpener } from './report-files.ts';
 import { buildMetricSeries, defaultRange, listPatientMetrics, timeRange } from './series.ts';
 import { byOccurredAt } from './store/submission.ts';
 import { newestFirst } from './store/suggestions.ts';
-import type { CodeEntry, Store } from './store/types.ts';
+import type { CodeEntry, Store, TimeRange } from './store/types.ts';
 
 const codeLifetimeMs = 10 * 60_000;
 const reportLinkLifetimeMs = 5 * 60_000;
+const phoneClockAllowanceMs = 86_400_000;
 const reportLinkHeaders = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };
 
 export type AppOptions = {
@@ -348,6 +350,11 @@ export const createApp = ({
     return { device: revoked };
   });
 
+  const phoneStampedRange = (range: MetricRange | undefined): TimeRange => {
+    const now = clock();
+    return { ...timeRange(range ?? defaultRange, now), to: new Date(now.getTime() + phoneClockAllowanceMs).toISOString() };
+  };
+
   const requirePairedDevice = (device: DeviceClaims, action: string): void => {
     if (device.scope !== 'patient') throw new HttpError('forbidden', `Only a paired device can ${action}`);
   };
@@ -390,7 +397,7 @@ export const createApp = ({
 
   staffRoute(routes.listPatientCheckIns, async ({ staff, params, query }) => {
     const { patient } = await clinicalPatient(store, staff, params.patientId);
-    const entries = await store.listCheckIns(patient.id, timeRange(query.range ?? defaultRange, clock()));
+    const entries = await store.listCheckIns(patient.id, phoneStampedRange(query.range));
     return {
       entries: entries.filter((entry) => query.item === undefined || entry.body.item === query.item).sort(newestCheckInFirst),
     };
@@ -398,7 +405,7 @@ export const createApp = ({
 
   staffRoute(routes.listPatientEpisodes, async ({ staff, params, query }) => {
     const { patient } = await clinicalPatient(store, staff, params.patientId);
-    const episodes = await store.listEpisodes(patient.id, timeRange(query.range ?? defaultRange, clock()));
+    const episodes = await store.listEpisodes(patient.id, phoneStampedRange(query.range));
     return { episodes: [...episodes].sort(byOccurredAt).reverse() };
   });
 

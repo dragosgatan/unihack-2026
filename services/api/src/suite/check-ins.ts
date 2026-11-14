@@ -178,6 +178,13 @@ export const checkInsSuite = (factory: HarnessFactory): void => {
       expect(listed).toEqual([first.episode]);
     });
 
+    it('lists an episode from a phone whose clock runs a few minutes ahead', async () => {
+      const { token } = await pair('pat-1');
+      const sent = { ...body(), occurredAt: minutesBefore(-10) };
+      expectOk(routes.logDeviceEpisode, await call(h.app, '/api/device/episodes', { method: 'POST', token, body: sent }));
+      expect((await episodes('pat-1'))[0]).toMatchObject({ id: sent.id, occurredAt: sent.occurredAt });
+    });
+
     it('keeps the same id from another patient’s phone apart', async () => {
       const own = await pair('pat-1');
       const other = await pair('pat-3');

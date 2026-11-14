@@ -79,7 +79,9 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'eu-central-1' }}
 
-      - run: npm run deploy -w infra
+      - run: npm run deploy -w infra -- -c reportSender="$REPORT_SENDER"
+        env:
+          REPORT_SENDER: ${{ vars.REPORT_SENDER }}
 
       - name: Smoke test
         if: vars.APP_URL != ''
