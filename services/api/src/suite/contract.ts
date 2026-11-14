@@ -55,6 +55,14 @@ export const contractSuite = (factory: HarnessFactory): void => {
       expectValid(routes.submitSession, submitted);
     });
 
+    it('POST /api/assistant/turn', async () => {
+      const body = { text: 'show finger tapping', language: 'en', screenId: 'clinician.patient', availableActionIds: ['openMetric'] };
+      const result = await call(h.app, '/api/assistant/turn', { method: 'POST', token: 'mock-attending', body });
+      expect(expectValid(routes.assistantTurn, result).actions).toEqual([
+        { id: 'openMetric', params: { metricId: 'finger-tapping.taps-per-second' } },
+      ]);
+    });
+
     it.each(seedPatientIds)('GET /api/patients/%s/sessions lists sessions newest first', async (patientId) => {
       const { sessions } = expectValid(routes.listPatientSessions, await call(h.app, `/api/patients/${h.id(patientId)}/sessions`));
       expect(sessions.length).toBeGreaterThan(0);

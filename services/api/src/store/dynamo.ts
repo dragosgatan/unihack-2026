@@ -14,6 +14,8 @@ import {
 import { z } from 'zod';
 import {
   activityResultSchema,
+  assistantTurnRecordSchema,
+  auditEntrySchema,
   baselineSchema,
   checkInEntrySchema,
   flagSchema,
@@ -33,6 +35,9 @@ import {
   type Session,
 } from '@tempo/shared';
 import {
+  assistantTurnKey,
+  auditKey,
+  auditPrefix,
   baselineKey,
   baselinePrefix,
   checkInKey,
@@ -558,6 +563,18 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
         if (isConditionFailure(error)) return undefined;
         throw error;
       }
+    },
+
+    putAuditEntry: (entry) => put({ ...auditKey(entry.institutionId, entry.at, entry.id), data: entry }),
+
+    listAuditEntries: async (institutionId) =>
+      (await queryPrefix(institutionPk(institutionId), auditPrefix)).map((item) => auditEntrySchema.parse(dataOf(item))),
+
+    putAssistantTurn: (turn) => put({ ...assistantTurnKey(turn.id), data: turn }),
+
+    getAssistantTurn: async (turnId) => {
+      const item = await get(assistantTurnKey(turnId));
+      return item && assistantTurnRecordSchema.parse(dataOf(item));
     },
   };
 };

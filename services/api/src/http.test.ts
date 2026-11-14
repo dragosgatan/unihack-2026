@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { createAi, createMockProvider } from '@tempo/pipeline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiErrorSchema, routes } from '@tempo/shared';
 import { createApp } from './create-app.ts';
@@ -43,6 +44,7 @@ describe('createApp', () => {
       clock: () => fixedNow,
       startPipeline: async () => {},
       publicData: offlinePublicData,
+      ai: createAi({ provider: createMockProvider() }),
     });
     const res = await app.request('/api/me');
     expect(res.status).toBe(500);

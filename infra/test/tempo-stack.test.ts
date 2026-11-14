@@ -240,13 +240,44 @@ describe('TempoStack', () => {
     expect(definition.match(/States\.ALL/g)).toHaveLength(pipelineSteps.length);
   });
 
-  it('gives only the AI steps the Gemini key and a longer timeout', () => {
+  it('gives only the AI steps and the API the Gemini key, and the AI steps a longer timeout', () => {
     const functions = Object.values(template.findResources('AWS::Lambda::Function')) as {
       Properties: { Handler: string; Timeout: number; Environment?: { Variables?: Record<string, unknown> } };
     }[];
     const withKey = functions.filter((fn) => fn.Properties.Environment?.Variables?.['GEMINI_SECRET_ARN'] !== undefined);
-    expect(withKey.map((fn) => fn.Properties.Handler).sort()).toEqual(['ai-items.handler', 'report.handler', 'suggest.handler']);
-    for (const fn of withKey) expect(fn.Properties.Timeout).toBe(180);
+    expect(withKey.map((fn) => fn.Properties.Handler).sort()).toEqual([
+      'ai-items.handler',
+      'lambda.handler',
+      'report.handler',
+      'suggest.handler',
+    ]);
+    for (const fn of withKey) expect(fn.Properties.Timeout).toBe(fn.Properties.Handler === 'lambda.handler' ? 29 : 180);
+  });
+
+  it('lets the API read the one Gemini key secret and use the same provider as the pipeline', () => {
+    const keySecrets = Object.keys(
+      template.findResources('AWS::SecretsManager::Secret', { Properties: { Description: 'Gemini API key as a plain string' } }),
+    );
+    expect(keySecrets).toEqual([expect.stringMatching(/^PipelineGeminiApiKey/)]);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'lambda.handler',
+      Environment: { Variables: { AI_PROVIDER: 'mock', GEMINI_SECRET_ARN: { Ref: keySecrets[0] } } },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      Roles: [{ Ref: Match.stringLikeRegexp('^ApiHandlerServiceRole') }],
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+            Resource: { Ref: keySecrets[0] },
+          }),
+        ]),
+      },
+    });
+    synth({ aiProvider: 'gemini' }).hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'lambda.handler',
+      Environment: { Variables: { AI_PROVIDER: 'gemini' } },
+    });
   });
 
   it('lets the API start the pipeline and tells it which state machine to use', () => {

@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import type { AiPart, AiProvider, AiTask } from './provider.ts';
+import { mockAssistantCalls } from './mock-assistant.ts';
+import type { AiPart, AiProvider, AiRequest, AiResponse, AiTask } from './provider.ts';
 import { suggestReviewSentSchema } from './suggest-review.ts';
 
 export const mockModel = 'mock';
 
-const canned: Record<Exclude<AiTask, 'session-summary' | 'suggestion'>, unknown> = {
+const canned: Record<Exclude<AiTask, 'session-summary' | 'suggestion' | 'assistant'>, unknown> = {
   'clock-drawing': {
     contour: { score: 1, justification: 'The face is a closed, roughly circular line.' },
     numbers: { score: 1, justification: 'Numbers 1 to 12 are present and in order around the face.' },
@@ -78,15 +79,23 @@ const suggestionFrom = (parts: AiPart[]): unknown => {
   };
 };
 
-export const createMockProvider = (): AiProvider => ({
-  name: 'mock',
-  generate: async ({ task, parts }) => ({
+const respond = (request: AiRequest): AiResponse => {
+  if ('tools' in request) return { data: undefined, model: mockModel, calls: mockAssistantCalls(request.parts, request.tools) };
+  const { task, parts } = request;
+  return {
     data:
       task === 'session-summary'
         ? summaryFrom(parts)
         : task === 'suggestion'
           ? suggestionFrom(parts)
-          : structuredClone(canned[task]),
+          : task === 'assistant'
+            ? undefined
+            : structuredClone(canned[task]),
     model: mockModel,
-  }),
+  };
+};
+
+export const createMockProvider = (): AiProvider => ({
+  name: 'mock',
+  generate: async (request) => respond(request),
 });

@@ -75,6 +75,9 @@ export class TempoStack extends Stack {
     const pipeline = new Pipeline(this, 'Pipeline', { bundleDir: props.pipelineBundleDir, table, appUrl });
     api.handler.addEnvironment('STATE_MACHINE_ARN', pipeline.stateMachine.stateMachineArn);
     pipeline.stateMachine.grantStartExecution(api.handler);
+    api.handler.addEnvironment('AI_PROVIDER', pipeline.aiProvider);
+    api.handler.addEnvironment('GEMINI_SECRET_ARN', pipeline.geminiKey.secretArn);
+    pipeline.geminiKey.grantRead(api.handler);
     new CfnOutput(this, 'GeminiKeySecretName', { value: pipeline.geminiKeySecretName });
 
     const deployRole = new DeployRole(this, 'Deploy');

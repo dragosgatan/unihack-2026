@@ -1,6 +1,8 @@
 import type {
   ActivityId,
   ActivityResult,
+  AssistantTurnRecord,
+  AuditEntry,
   Baseline,
   CheckInEntry,
   Flag,
@@ -106,4 +108,8 @@ export type Store = {
   getSuggestion(patientId: string, suggestionId: string): Promise<Suggestion | undefined>;
   listSuggestions(patientId: string): Promise<Suggestion[]>;
   decideSuggestion(patientId: string, suggestionId: string, decision: SuggestionDecision): Promise<Suggestion | undefined>;
+  putAuditEntry(entry: AuditEntry): Promise<void>;
+  listAuditEntries(institutionId: string): Promise<AuditEntry[]>;
+  putAssistantTurn(turn: AssistantTurnRecord): Promise<void>;
+  getAssistantTurn(turnId: string): Promise<AssistantTurnRecord | undefined>;
 };

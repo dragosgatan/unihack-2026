@@ -1,5 +1,5 @@
 import type { Context, Hono } from 'hono';
-import type { RouteDefinition } from '@tempo/shared';
+import { assistantViaHeader, type RouteDefinition } from '@tempo/shared';
 
 type Parsed<Schema> = Schema extends { parse(data: unknown): infer Output } ? Output : undefined;
 type PartKey = 'params' | 'query' | 'body';
@@ -10,6 +10,8 @@ export type RouteParts<Route> = {
   query: Part<Route, 'query'>;
   body: Part<Route, 'body'>;
 };
+
+export type Via = 'assistant' | undefined;
 
 export type RouteResponse<Route extends RouteDefinition> = Parsed<Route['response']>;
 
@@ -62,6 +64,12 @@ const parsePart = <Route extends RouteDefinition, Key extends PartKey>(
   return result.data as Part<Route, Key>;
 };
 
+const viaOf = (header: string | undefined): Via => {
+  if (header === undefined) return undefined;
+  if (header === 'assistant') return 'assistant';
+  throw new HttpError('invalid_request', `Unknown ${assistantViaHeader} value`);
+};
+
 const readJson = async (c: Context): Promise<unknown> => {
   try {
     return await c.req.json();
@@ -74,15 +82,16 @@ export const mountRoute = <Route extends RouteDefinition, Caller extends object>
   app: Hono,
   route: Route,
   authorize: (authorization: string | undefined) => Caller | Promise<Caller>,
-  handler: (input: RouteParts<Route> & Caller) => RouteResponse<Route> | Promise<RouteResponse<Route>>,
+  handler: (input: RouteParts<Route> & Caller & { via: Via }) => RouteResponse<Route> | Promise<RouteResponse<Route>>,
 ): void => {
   app.on(route.method, route.path, async (c) => {
     try {
       const caller = await authorize(c.req.header('authorization'));
+      const via = viaOf(c.req.header(assistantViaHeader));
       const params = parsePart(route, 'params', c.req.param());
       const query = parsePart(route, 'query', c.req.query());
       const body = parsePart(route, 'body', route.body ? await readJson(c) : undefined);
-      const checked = route.response.safeParse(await handler({ params, query, body, ...caller }));
+      const checked = route.response.safeParse(await handler({ params, query, body, via, ...caller }));
       if (!checked.success) {
         return internalErrorResponse(
           `Response does not match the schema for ${route.method} ${route.path}`,

@@ -6,6 +6,7 @@ import {
   assistantActions,
   assistantRoleSchema,
   assistantTurnRequestSchema,
+  assistantTurnRecordSchema,
   assistantTurnResponseSchema,
   confirmationLevelSchema,
   runningActivityActionIds,
@@ -133,12 +134,52 @@ describe('POST /api/assistant/turn', () => {
       transcript: 'my pain is six in my left knee',
       reply: 'Pain six, left knee. Shall I save that?',
       actions: [{ id: 'answerCheckIn', params: { item: 'pain', intensity: 6, location: 'left-knee' } }],
+      droppedActionIds: [],
     };
     expect(assistantTurnResponseSchema.safeParse(response).success).toBe(true);
   });
 
-  it('returns a reply with no actions when nothing is allowed', () => {
-    const response = { turnId: 'turn-2', transcript: 'do the test for me', reply: 'That one is yours to do.', actions: [] };
+  it('returns a reply with no actions when nothing is allowed, and the ids it dropped', () => {
+    const response = {
+      turnId: 'turn-2',
+      transcript: 'do the test for me',
+      reply: 'That one is yours to do.',
+      actions: [],
+      droppedActionIds: ['answerTest'],
+    };
     expect(assistantTurnResponseSchema.safeParse(response).success).toBe(true);
+    const { droppedActionIds, ...withoutDropped } = response;
+    expect(droppedActionIds).toHaveLength(1);
+    expect(assistantTurnResponseSchema.safeParse(withoutDropped).success).toBe(false);
+  });
+});
+
+describe('assistantTurnRecordSchema', () => {
+  const record = {
+    id: 'turn-1',
+    institutionId: 'inst-1',
+    callerRole: 'patient',
+    callerId: 'pat-1',
+    screenId: 'patient.check-in.pain',
+    language: 'en',
+    input: 'text',
+    transcript: 'my pain is six',
+    reply: 'Pain six. Shall I save that?',
+    model: 'mock',
+    promptVersion: 'assistant-1',
+    inputRef: 'assistant-turn:turn-1',
+    provider: 'mock',
+    keptActions: [{ id: 'answerCheckIn', params: { item: 'pain', intensity: 6 } }],
+    droppedActions: [{ id: 'openPatient', reason: 'role' }],
+    createdAt: '2026-11-13T12:00:00.000Z',
+  };
+
+  it('keeps the transcript, the kept and dropped actions and where the reply came from', () => {
+    expect(assistantTurnRecordSchema.safeParse(record).success).toBe(true);
+  });
+
+  it('rejects an unknown drop reason', () => {
+    const bad = { ...record, droppedActions: [{ id: 'openPatient', reason: 'nope' }] };
+    expect(assistantTurnRecordSchema.safeParse(bad).success).toBe(false);
   });
 });

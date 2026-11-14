@@ -15,9 +15,10 @@ export type MockAppOptions = { clock?: () => Date; seed?: Seed; store?: Store };
 
 export const createMockApp = ({ clock = () => new Date(), seed, store: given }: MockAppOptions = {}): Hono => {
   const store = given ?? createMemoryStore(seed ?? buildSeed(clock()));
+  const ai = aiFromEnv();
   const pipeline = {
     store,
-    ai: createPipelineAi(aiFromEnv()),
+    ai: createPipelineAi(ai),
     publicData: offlinePublicData,
     sendEmail: logEmail,
     clock,
@@ -32,6 +33,7 @@ export const createMockApp = ({ clock = () => new Date(), seed, store: given }: 
       await runPipeline(pipeline, { sessionId });
     },
     publicData: offlinePublicData,
+    ai,
     demoSessionCodes,
   });
 };

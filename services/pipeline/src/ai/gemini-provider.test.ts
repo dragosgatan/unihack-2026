@@ -1,10 +1,12 @@
-import { recordDraftSchema, speechTranscriptSchema } from '@tempo/shared';
+import { assistantActions, recordDraftSchema, speechTranscriptSchema } from '@tempo/shared';
+import { z } from 'zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAi } from './index.ts';
 import {
   GeminiRequestError,
   createGeminiProvider,
   geminiApiRevision,
+  geminiAssistantTimeoutMs,
   geminiEndpoint,
   geminiFallbackModel,
   geminiModel,
@@ -154,6 +156,92 @@ describe('Gemini provider', () => {
     const ai = createAi({ provider: createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl }) });
     const result = await ai.transcribeSpeech({ audio, language: 'en', inputRef: 'audio/r1.webm' });
     expect(result.meta).toMatchObject({ provider: 'gemini', model: 'gemini-3.8-flash-001', inputRef: 'audio/r1.webm' });
+  });
+});
+
+describe('Gemini provider with function tools', () => {
+  const toolsRequest: AiRequest = {
+    task: 'assistant',
+    system: 'assistant prompt',
+    parts: [{ text: 'The user speaks Romanian.' }, { mimeType: 'audio/mp4;codecs=mp4a.40.2', data: new Uint8Array([7]) }],
+    tools: [
+      { name: 'cannotDo', description: 'Open the cannot-do screen.', parameters: assistantActions.cannotDo.params },
+      { name: 'answerCheckIn', description: 'Fill in a check-in.', parameters: assistantActions.answerCheckIn.params },
+      { name: 'respond', description: 'Reply.', parameters: z.object({ reply: z.string(), transcript: z.string().optional() }) },
+    ],
+  };
+
+  const callInteraction = (status: string) => ({
+    id: 'int-2',
+    object: 'interaction',
+    model: 'gemini-3.8-flash-001',
+    status,
+    steps: [
+      { type: 'user_input', content: [{ type: 'text', text: 'ignored' }] },
+      { type: 'thought', signature: 'abc' },
+      { type: 'function_call', id: 'call-1', name: 'cannotDo', arguments: {} },
+      { type: 'function_call', id: 'call-2', name: 'respond', arguments: { reply: 'Deschid ecranul.', transcript: 'nu pot' } },
+      { type: 'function_call', id: 'call-3', name: 'goBack' },
+    ],
+  });
+
+  it('declares the tools, forces a function call and sends no response format', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const { fetchImpl, calls } = fakeFetch(() => json(callInteraction('requires_action')));
+    await createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl }).generate(toolsRequest);
+
+    const body = bodyOf(calls[0]);
+    expect(body).not.toHaveProperty('response_format');
+    expect(body).toMatchObject({
+      model: geminiModel,
+      system_instruction: 'assistant prompt',
+      store: false,
+      generation_config: { tool_choice: 'any' },
+      input: [
+        { type: 'text', text: 'The user speaks Romanian.' },
+        { type: 'audio', mime_type: 'audio/m4a', data: 'Bw==' },
+      ],
+    });
+    expect(body['tools']).toEqual([
+      { type: 'function', name: 'cannotDo', description: 'Open the cannot-do screen.', parameters: { type: 'object', properties: {} } },
+      {
+        type: 'function',
+        name: 'answerCheckIn',
+        description: 'Fill in a check-in.',
+        parameters: expect.objectContaining({ type: 'object', required: ['item'] }),
+      },
+      {
+        type: 'function',
+        name: 'respond',
+        description: 'Reply.',
+        parameters: { type: 'object', properties: { reply: { type: 'string' }, transcript: { type: 'string' } }, required: ['reply'] },
+      },
+    ]);
+    expect(JSON.stringify(body['tools'])).not.toMatch(/anyOf|oneOf|\$schema|const|additionalProperties/);
+    expect(timeout).toHaveBeenCalledWith(geminiAssistantTimeoutMs);
+  });
+
+  it.each(['completed', 'requires_action'])('reads the function calls of a %s interaction', async (status) => {
+    const { fetchImpl } = fakeFetch(() => json(callInteraction(status)));
+    const response = await createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl }).generate(toolsRequest);
+    expect(response).toEqual({
+      data: undefined,
+      model: 'gemini-3.8-flash-001',
+      calls: [
+        { name: 'cannotDo', arguments: {} },
+        { name: 'respond', arguments: { reply: 'Deschid ecranul.', transcript: 'nu pot' } },
+        { name: 'goBack', arguments: {} },
+      ],
+    });
+  });
+
+  it('still rejects a failed interaction, and requires_action without tools', async () => {
+    const failed = fakeFetch(() => json(callInteraction('failed')));
+    const provider = createGeminiProvider({ apiKey: async () => apiKey, fetch: failed.fetchImpl });
+    await expect(provider.generate(toolsRequest)).rejects.toBeInstanceOf(GeminiRequestError);
+    const pending = fakeFetch(() => json(interaction('{}', 'requires_action')));
+    const structured = createGeminiProvider({ apiKey: async () => apiKey, fetch: pending.fetchImpl });
+    await expect(structured.generate(request)).rejects.toBeInstanceOf(GeminiRequestError);
   });
 });
 

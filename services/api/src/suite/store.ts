@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Flag, Session, SubmittedResult, Suggestion } from '@tempo/shared';
+import type { AssistantTurnRecord, AuditEntry, Flag, Session, SubmittedResult, Suggestion } from '@tempo/shared';
 import type { Store } from '../store/types.ts';
 
 export type StoreFactory = () => Store;
@@ -90,6 +90,58 @@ export const storeSuite = (factory: StoreFactory): void => {
 
       expect(await store.decideSuggestion(patientId, unique('sugg'), { status: 'dismissed', ...by })).toBeUndefined();
       expect(await store.getSuggestion(patientId, 'sugg-missing')).toBeUndefined();
+    });
+  });
+
+  describe('audit log', () => {
+    it('lists an institution’s entries oldest first and keeps the assistant marker', async () => {
+      const store = factory();
+      const institutionId = unique('inst');
+      const entry = (id: string, at: string): AuditEntry => ({
+        id,
+        institutionId,
+        actorId: 'staff-att-1',
+        actorRole: 'attending',
+        action: 'create',
+        entityType: 'session',
+        entityId: unique('sess'),
+        patientId: 'pat-1',
+        at,
+      });
+      const later = { ...entry(unique('audit'), '2026-11-13T12:00:00.000Z'), via: 'assistant' as const };
+      const earlier = entry(unique('audit'), '2026-11-13T09:00:00.000Z');
+      await store.putAuditEntry(later);
+      await store.putAuditEntry(earlier);
+      await store.putAuditEntry({ ...earlier, id: unique('audit'), institutionId: unique('inst') });
+      expect(await store.listAuditEntries(institutionId)).toEqual([earlier, later]);
+      expect(await store.listAuditEntries(unique('inst'))).toEqual([]);
+    });
+  });
+
+  describe('assistant turns', () => {
+    it('stores a turn and reads it back by id', async () => {
+      const store = factory();
+      const turn: AssistantTurnRecord = {
+        id: unique('turn'),
+        institutionId: 'inst-1',
+        callerRole: 'patient',
+        callerId: 'pat-1',
+        screenId: 'patient.check-in.pain',
+        language: 'ro',
+        input: 'audio',
+        transcript: 'durerea mea este șase',
+        reply: 'Durere șase. O salvez?',
+        model: 'gemini-3.8-flash-001',
+        promptVersion: 'assistant-1',
+        inputRef: 'assistant-turn:turn-1',
+        provider: 'gemini',
+        keptActions: [{ id: 'answerCheckIn', params: { item: 'pain', intensity: 6 } }],
+        droppedActions: [{ id: 'clickElement', reason: 'unregistered' }],
+        createdAt: '2026-11-13T12:00:00.000Z',
+      };
+      await store.putAssistantTurn(turn);
+      expect(await store.getAssistantTurn(turn.id)).toEqual(turn);
+      expect(await store.getAssistantTurn(unique('turn'))).toBeUndefined();
     });
   });
 

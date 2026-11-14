@@ -105,6 +105,14 @@ export const keyOfFlag = (flag: Flag): Key =>
     ? flagKey(flag.patientId, flag.sessionId, flag.metricId, flag.side)
     : skipFlagKey(flag.patientId, flag.sessionId, flag.kind, flag.activityId);
 
+export const auditPrefix = 'AUDIT#';
+export const auditKey = (institutionId: string, at: string, entryId: string): Key => ({
+  pk: institutionPk(institutionId),
+  sk: `${auditPrefix}${at}#${entryId}`,
+});
+
+export const assistantTurnKey = (turnId: string): Key => ({ pk: `TURN#${turnId}`, sk: meta });
+
 export const codeKey = (code: string): Key => ({ pk: `CODE#${code}`, sk: meta });
 
 export const publicDataKey = (kind: PublicDataKind, query: string): Key => ({

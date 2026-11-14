@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Hono } from 'hono';
+import { createAi, createMockProvider } from '@tempo/pipeline';
 import { apiErrorSchema, type RouteDefinition } from '@tempo/shared';
 import { expect } from 'vitest';
 import type { z } from 'zod';
@@ -16,6 +17,7 @@ import type { Store } from '../store/types.ts';
 
 export type Harness = {
   app: Hono;
+  store: Store;
   seed: Seed;
   startedPipelines: string[];
   id: (seedId: string) => string;
@@ -39,9 +41,11 @@ const harnessFor = (store: Store, seed: Seed, ids: ReadonlyMap<string, string>):
       startedPipelines.push(sessionId);
     },
     publicData: offlinePublicData,
+    ai: createAi({ provider: createMockProvider(), now: () => now }),
   });
   return {
     app,
+    store,
     seed,
     startedPipelines,
     id: (seedId) => ids.get(seedId) ?? seedId,

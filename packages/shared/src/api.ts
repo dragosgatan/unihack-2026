@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assistantTurnRequestSchema, assistantTurnResponseSchema } from './assistant.ts';
 import { idSchema, isoDateTimeSchema, languageSchema, sideSchema } from './common.ts';
 import { pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
 import { flagSchema } from './flag.ts';
@@ -160,7 +161,7 @@ export const suggestionDecisionResponseSchema = z.object({
 export type RouteDefinition = {
   method: 'GET' | 'POST';
   path: string;
-  auth: 'staff' | 'device' | 'none';
+  auth: 'staff' | 'device' | 'staff-or-device' | 'none';
   params?: z.ZodType;
   query?: z.ZodType;
   body?: z.ZodType;
@@ -301,6 +302,13 @@ export const routes = {
     auth: 'staff',
     params: patientParamsSchema,
     response: flagListResponseSchema,
+  },
+  assistantTurn: {
+    method: 'POST',
+    path: '/api/assistant/turn',
+    auth: 'staff-or-device',
+    body: assistantTurnRequestSchema,
+    response: assistantTurnResponseSchema,
   },
 } as const satisfies Record<string, RouteDefinition>;
 

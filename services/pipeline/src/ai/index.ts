@@ -1,4 +1,5 @@
 import { aiProviderNameSchema } from '@tempo/shared';
+import { assistantTurn, type AssistantTurnInput, type AssistantTurnOutput } from './assistant-turn.ts';
 import { scoreClockDrawing, type ScoreClockDrawingInput } from './clock-drawing.ts';
 import { intakeEpisode, type IntakeEpisodeInput } from './episode-intake.ts';
 import { createGeminiProvider } from './gemini-provider.ts';
@@ -14,8 +15,11 @@ export { AiOutputInvalidError } from './generate.ts';
 export { GeminiRequestError, createGeminiProvider, geminiModel } from './gemini-provider.ts';
 export { createMockProvider } from './mock-provider.ts';
 export { clockRubric } from './clock-drawing.ts';
-export type { AiPart, AiProvider, AiRequest, AiResponse, AiTask, Media } from './provider.ts';
+export type { AiFunctionCall, AiPart, AiProvider, AiRequest, AiResponse, AiTask, AiTool, Media } from './provider.ts';
+export { assistantPromptVersion } from './assistant-turn.ts';
 export type {
+  AssistantTurnInput,
+  AssistantTurnOutput,
   IntakeEpisodeInput,
   IntakeRecordInput,
   ScoreClockDrawingInput,
@@ -35,6 +39,7 @@ export const createAi = ({ provider, now = () => new Date() }: { provider: AiPro
     intakeRecord: (input: IntakeRecordInput) => intakeRecord(context, input),
     intakeEpisode: (input: IntakeEpisodeInput) => intakeEpisode(context, input),
     suggestReview: (input: SuggestReviewInput) => suggestReview(context, input),
+    assistantTurn: (input: AssistantTurnInput) => assistantTurn(context, input),
   };
 };
 

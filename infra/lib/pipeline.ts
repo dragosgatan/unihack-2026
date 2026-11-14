@@ -3,7 +3,7 @@ import type { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { Secret, type ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import {
   DefinitionBody,
   Errors,
@@ -34,6 +34,8 @@ export interface PipelineProps {
 export class Pipeline extends Construct {
   readonly stateMachine: StateMachine;
   readonly geminiKeySecretName: string;
+  readonly geminiKey: ISecret;
+  readonly aiProvider: 'gemini' | 'mock';
 
   constructor(scope: Construct, id: string, props: PipelineProps) {
     super(scope, id);
@@ -46,6 +48,8 @@ export class Pipeline extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
     });
     this.geminiKeySecretName = geminiKey.secretName;
+    this.geminiKey = geminiKey;
+    this.aiProvider = aiProvider;
     const code = Code.fromAsset(props.bundleDir);
     const stack = Stack.of(this);
 

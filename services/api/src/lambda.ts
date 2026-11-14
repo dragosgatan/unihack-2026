@@ -1,5 +1,6 @@
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { handle } from 'hono/aws-lambda';
+import { aiFromEnv } from '@tempo/pipeline';
 import { createCognitoStaffAuth } from './auth/staff.ts';
 import { cacheSuccess } from './cache.ts';
 import { createApp } from './create-app.ts';
@@ -34,5 +35,6 @@ const staffAuth = createCognitoStaffAuth({
 
 const startPipeline = createStepFunctionsStarter(requiredEnv('STATE_MACHINE_ARN'));
 const publicData = createPublicData({ fetch, clock, cache: store });
+const ai = aiFromEnv();
 
-export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline, publicData }));
+export const handler = handle(createApp({ store, staffAuth, tokenSecret, clock, startPipeline, publicData, ai }));

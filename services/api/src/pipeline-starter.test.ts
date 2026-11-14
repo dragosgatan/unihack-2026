@@ -1,4 +1,5 @@
 import { ExecutionAlreadyExists, SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
+import { createAi, createMockProvider } from '@tempo/pipeline';
 import { routes } from '@tempo/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockStaffAuth } from './auth/staff.ts';
@@ -54,6 +55,7 @@ describe('session submit', () => {
         throw new Error('state machine unavailable');
       },
       publicData: offlinePublicData,
+      ai: createAi({ provider: createMockProvider() }),
       demoSessionCodes,
     });
     const redeemed = routes.redeemSessionCode.response.parse(

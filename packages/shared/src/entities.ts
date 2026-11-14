@@ -43,6 +43,8 @@ export const auditEntityTypeSchema = z.enum([
   'suggestion',
   'course-of-care',
   'baseline',
+  'pairing-code',
+  'device',
 ]);
 
 export const auditEntrySchema = z.object({
@@ -55,6 +57,7 @@ export const auditEntrySchema = z.object({
   entityId: idSchema,
   patientId: idSchema.optional(),
   at: isoDateTimeSchema,
+  via: z.literal('assistant').optional(),
 });
 
 export const pairedDeviceSchema = z.object({

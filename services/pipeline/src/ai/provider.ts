@@ -1,20 +1,30 @@
 import type { AiProviderName } from '@tempo/shared';
 import type { z } from 'zod';
 
-export type AiTask = 'clock-drawing' | 'speech' | 'session-summary' | 'record-intake' | 'episode-intake' | 'suggestion';
+export type AiTask =
+  | 'clock-drawing'
+  | 'speech'
+  | 'session-summary'
+  | 'record-intake'
+  | 'episode-intake'
+  | 'suggestion'
+  | 'assistant';
 
 export type Media = { mimeType: string; data: Uint8Array };
 
 export type AiPart = { text: string } | Media;
 
+export type AiTool = { name: string; description: string; parameters: z.ZodType };
+
+export type AiFunctionCall = { name: string; arguments: unknown };
+
 export type AiRequest = {
   task: AiTask;
   system: string;
   parts: AiPart[];
-  responseSchema: z.ZodType;
-};
+} & ({ responseSchema: z.ZodType } | { tools: AiTool[] });
 
-export type AiResponse = { data: unknown; model: string };
+export type AiResponse = { data: unknown; model: string; calls?: AiFunctionCall[] };
 
 export type AiProvider = {
   name: AiProviderName;

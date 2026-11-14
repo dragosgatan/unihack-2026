@@ -7,14 +7,20 @@ export const fixedNow = new Date('2026-11-13T12:00:00.000Z');
 
 export const buildTestApp = (seed?: Seed): Hono => createMockApp({ clock: () => fixedNow, ...(seed ? { seed } : {}) });
 
-export type CallOptions = { method?: 'GET' | 'POST'; token?: string; authorization?: string; body?: unknown };
+export type CallOptions = {
+  method?: 'GET' | 'POST';
+  token?: string;
+  authorization?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
 
 export const call = async (
   app: Hono,
   path: string,
-  { method = 'GET', token, authorization, body }: CallOptions = {},
+  { method = 'GET', token, authorization, body, headers: extra = {} }: CallOptions = {},
 ): Promise<{ status: number; body: unknown }> => {
-  const headers = new Headers();
+  const headers = new Headers(extra);
   if (token !== undefined) headers.set('authorization', `Bearer ${token}`);
   if (authorization !== undefined) headers.set('authorization', authorization);
   if (body !== undefined) headers.set('content-type', 'application/json');

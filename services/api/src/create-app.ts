@@ -1,7 +1,11 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import type { Ai } from '@tempo/pipeline';
 import {
   routes,
+  type AssistantRole,
+  type AssistantTurnRecord,
+  type AuditEntry,
   type Patient,
   type RouteDefinition,
   type Session,
@@ -10,6 +14,7 @@ import {
 } from '@tempo/shared';
 import { clinicalPatient, requireRecord, visiblePatients } from './access.ts';
 import { app as baseApp } from './app.ts';
+import { filterAssistantCalls, safeReply } from './assistant.ts';
 import {
   signPatientToken,
   signSessionToken,
@@ -26,6 +31,7 @@ import {
   mountRoute,
   type RouteParts,
   type RouteResponse,
+  type Via,
 } from './http.ts';
 import type { PipelineStarter } from './pipeline-starter.ts';
 import type { PublicData } from './public-data/index.ts';
@@ -42,8 +48,13 @@ export type AppOptions = {
   clock: () => Date;
   startPipeline: PipelineStarter;
   publicData: PublicData;
+  ai: Pick<Ai, 'assistantTurn'>;
   demoSessionCodes?: ReadonlyMap<string, string>;
 };
+
+type AssistantCaller = { role: AssistantRole; id: string; institutionId: string };
+
+type AuditFields = Pick<AuditEntry, 'action' | 'entityType' | 'entityId' | 'patientId'>;
 
 const firstName = (patient: Patient): string => patient.name.split(' ')[0] ?? patient.name;
 
@@ -54,6 +65,7 @@ export const createApp = ({
   clock,
   startPipeline,
   publicData,
+  ai,
   demoSessionCodes = new Map(),
 }: AppOptions): Hono => {
   const app = new Hono();
@@ -61,7 +73,7 @@ export const createApp = ({
 
   const staffRoute = <Route extends RouteDefinition & { auth: 'staff' }>(
     route: Route,
-    handler: (input: RouteParts<Route> & { staff: Staff }) => Promise<RouteResponse<Route>>,
+    handler: (input: RouteParts<Route> & { staff: Staff; via: Via }) => Promise<RouteResponse<Route>>,
   ) => mountRoute(app, route, async (authorization) => ({ staff: await staffAuth(authorization) }), handler);
 
   const deviceRoute = <Route extends RouteDefinition & { auth: 'device' }>(
@@ -83,6 +95,40 @@ export const createApp = ({
       if (!device || device.revokedAt !== undefined) throw new HttpError('unauthenticated', 'Device is not paired');
     }
     return claims;
+  };
+
+  const unlessUnauthenticated = async <Caller>(attempt: Promise<Caller>): Promise<Caller | undefined> => {
+    try {
+      return await attempt;
+    } catch (error) {
+      if (error instanceof HttpError && error.code === 'unauthenticated') return undefined;
+      throw error;
+    }
+  };
+
+  const assistantCaller = async (authorization: string | undefined): Promise<{ caller: AssistantCaller }> => {
+    if (bearerToken(authorization) !== undefined) {
+      const device = await unlessUnauthenticated(deviceClaims(authorization));
+      if (device) return { caller: { role: 'patient', id: device.pid, institutionId: device.inst } };
+      const staff = await unlessUnauthenticated(staffAuth(authorization));
+      if (staff) return { caller: { role: staff.role, id: staff.id, institutionId: staff.institutionId } };
+    }
+    throw new HttpError('unauthenticated', 'Unknown, expired or missing token');
+  };
+
+  const audit = (staff: Staff, via: Via, fields: AuditFields): Promise<void> =>
+    store.putAuditEntry({
+      id: `audit-${randomUUID()}`,
+      institutionId: staff.institutionId,
+      actorId: staff.id,
+      actorRole: staff.role,
+      ...fields,
+      at: clock().toISOString(),
+      ...(via === undefined ? {} : { via }),
+    });
+
+  const requireHuman = (via: Via): void => {
+    if (via !== undefined) throw new HttpError('forbidden', 'This has to be done by hand, not through the assistant');
   };
 
   const issueCode = async (entry: (code: string) => CodeEntry, now: Date): Promise<string> => {
@@ -119,7 +165,7 @@ export const createApp = ({
     return { patient: detail.patient, record: requireRecord(detail), plan: detail.plan ?? null };
   });
 
-  staffRoute(routes.createSession, async ({ staff, params, body }) => {
+  staffRoute(routes.createSession, async ({ staff, params, body, via }) => {
     const { patient, plan } = await clinicalPatient(store, staff, params.patientId);
     if (!plan) throw new HttpError('invalid_request', 'Patient has no session plan');
     const now = clock();
@@ -133,6 +179,7 @@ export const createApp = ({
       (candidate) => ({ kind: 'session', code: candidate, sessionId: session.id, expiresAt, used: false }),
       now,
     );
+    await audit(staff, via, { action: 'create', entityType: 'session', entityId: session.id, patientId: patient.id });
     return { session, code, expiresAt };
   });
 
@@ -212,7 +259,8 @@ export const createApp = ({
     });
   });
 
-  staffRoute(routes.createPairingCode, async ({ staff, params }) => {
+  staffRoute(routes.createPairingCode, async ({ staff, params, via }) => {
+    requireHuman(via);
     const { patient } = await clinicalPatient(store, staff, params.patientId);
     const now = clock();
     const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();
@@ -220,6 +268,7 @@ export const createApp = ({
       (candidate) => ({ kind: 'pairing', code: candidate, patientId: patient.id, expiresAt, used: false }),
       now,
     );
+    await audit(staff, via, { action: 'create', entityType: 'pairing-code', entityId: patient.id, patientId: patient.id });
     return { code, expiresAt };
   });
 
@@ -254,13 +303,15 @@ export const createApp = ({
     return { devices: await store.listDevices(patient.id) };
   });
 
-  staffRoute(routes.revokeDevice, async ({ staff, params }) => {
+  staffRoute(routes.revokeDevice, async ({ staff, params, via }) => {
+    requireHuman(via);
     const { patient } = await clinicalPatient(store, staff, params.patientId);
     const device = await store.getDevice(patient.id, params.deviceId);
     if (!device) throw new HttpError('not_found', 'Device not found');
     if (device.revokedAt !== undefined) return { device };
     const revoked = { ...device, revokedAt: clock().toISOString(), revokedBy: staff.id };
     await store.putDevice(revoked);
+    await audit(staff, via, { action: 'update', entityType: 'device', entityId: device.id, patientId: patient.id });
     return { device: revoked };
   });
 
@@ -288,7 +339,8 @@ export const createApp = ({
     return { suggestions: await store.listSuggestions(patient.id) };
   });
 
-  staffRoute(routes.decideSuggestion, async ({ staff, params, body }) => {
+  staffRoute(routes.decideSuggestion, async ({ staff, params, body, via }) => {
+    requireHuman(via);
     const { patient } = await clinicalPatient(store, staff, params.patientId);
     const suggestion = await store.decideSuggestion(patient.id, params.suggestionId, {
       ...body,
@@ -296,12 +348,61 @@ export const createApp = ({
       decidedAt: clock().toISOString(),
     });
     if (!suggestion) throw new HttpError('not_found', 'Suggestion not found');
+    await audit(staff, via, { action: 'update', entityType: 'suggestion', entityId: suggestion.id, patientId: patient.id });
     return { suggestion };
   });
 
   staffRoute(routes.listPatientFlags, async ({ staff, params }) => {
     const { patient } = await clinicalPatient(store, staff, params.patientId);
     return { flags: await store.listPatientFlags(patient.id) };
+  });
+
+  mountRoute(app, routes.assistantTurn, assistantCaller, async ({ caller, body }) => {
+    const turnId = `turn-${randomUUID()}`;
+    const input =
+      'audio' in body
+        ? { audio: { mimeType: body.audio.mimeType, data: new Uint8Array(Buffer.from(body.audio.data, 'base64')) } }
+        : { text: body.text };
+    const { output, meta } = await ai
+      .assistantTurn({
+        language: body.language,
+        screenId: body.screenId,
+        availableActionIds: body.availableActionIds,
+        input,
+        inputRef: `assistant-turn:${turnId}`,
+      })
+      .catch((error: unknown) => {
+        console.error('Assistant turn failed', error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error');
+        throw new HttpError('internal', 'Something went wrong');
+      });
+    const filtered = filterAssistantCalls(output.calls, caller.role, body.availableActionIds);
+    const reply = safeReply(output.reply, body.language, filtered);
+    const turn: AssistantTurnRecord = {
+      id: turnId,
+      institutionId: caller.institutionId,
+      callerRole: caller.role,
+      callerId: caller.id,
+      screenId: body.screenId,
+      language: body.language,
+      input: 'audio' in body ? 'audio' : 'text',
+      transcript: output.transcript,
+      reply,
+      model: meta.model,
+      promptVersion: meta.promptVersion,
+      inputRef: meta.inputRef,
+      provider: meta.provider,
+      keptActions: filtered.kept,
+      droppedActions: filtered.dropped,
+      createdAt: clock().toISOString(),
+    };
+    await store.putAssistantTurn(turn);
+    return {
+      turnId,
+      transcript: output.transcript,
+      reply,
+      actions: filtered.kept,
+      droppedActionIds: filtered.dropped.map((dropped) => dropped.id),
+    };
   });
 
   app.notFound(() => errorResponse('not_found', 'Route not found'));

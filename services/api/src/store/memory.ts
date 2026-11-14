@@ -1,5 +1,7 @@
 import type {
   ActivityResult,
+  AssistantTurnRecord,
+  AuditEntry,
   Baseline,
   CheckInEntry,
   Flag,
@@ -33,6 +35,12 @@ const byTime =<Item extends { t: string }>(a: Item, b: Item): number => (a.t < b
 
 const point = ({ t, value, sessionId }: MetricValue): MetricPoint => ({ t, value, sessionId });
 
+const byAuditTime = (a: AuditEntry, b: AuditEntry): number => {
+  const left = `${a.at}#${a.id}`;
+  const right = `${b.at}#${b.id}`;
+  return left < right ? -1 : left > right ? 1 : 0;
+};
+
 const isOpen = (session: Session): boolean => session.status === 'created' || session.status === 'in-progress';
 
 const isLive = (entry: CodeEntry, now: Date): boolean => !entry.used && entry.expiresAt > now.toISOString();
@@ -57,6 +65,8 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const painAlerts = new Set<string>();
   const publicData = new Map<string, PublicDataEntry>();
   const suggestions = new Map<string, Suggestion>();
+  const auditEntries: AuditEntry[] = [];
+  const assistantTurns = new Map<string, AssistantTurnRecord>();
 
   const addMetricValues = (values: MetricValue[]): void => {
     for (const value of values) {
@@ -287,5 +297,18 @@ export const createMemoryStore = (seed?: Seed): Store => {
       suggestions.set(key, decided);
       return decided;
     },
+
+    putAuditEntry: async (entry) => {
+      auditEntries.push(entry);
+    },
+
+    listAuditEntries: async (institutionId) =>
+      auditEntries.filter((entry) => entry.institutionId === institutionId).sort(byAuditTime),
+
+    putAssistantTurn: async (turn) => {
+      assistantTurns.set(turn.id, turn);
+    },
+
+    getAssistantTurn: async (turnId) => assistantTurns.get(turnId),
   };
 };

@@ -35,6 +35,22 @@ describe('auditEntrySchema', () => {
     };
     expect(auditEntrySchema.safeParse(entry).success).toBe(true);
   });
+
+  it('marks a write made through the assistant and nothing else', () => {
+    const entry = {
+      id: 'audit-2',
+      institutionId: institution.id,
+      actorId: attending.id,
+      actorRole: 'attending',
+      action: 'create',
+      entityType: 'session',
+      entityId: 'sess-1',
+      patientId: patient.id,
+      at: '2026-11-13T10:02:00.000Z',
+    };
+    expect(auditEntrySchema.safeParse({ ...entry, via: 'assistant' }).success).toBe(true);
+    expect(auditEntrySchema.safeParse({ ...entry, via: 'voice' }).success).toBe(false);
+  });
 });
 
 describe('pairedDeviceSchema', () => {

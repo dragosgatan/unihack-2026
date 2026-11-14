@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { checkInBodySchema, episodeTypeSchema } from './checkin.ts';
-import { idSchema, languageSchema, roleSchema } from './common.ts';
+import { aiProviderNameSchema } from './ai.ts';
+import { idSchema, isoDateTimeSchema, languageSchema, roleSchema } from './common.ts';
 import { metricIdSchema } from './metrics.ts';
 
 export const assistantRoleSchema = z.enum(['patient', ...roleSchema.options]);
@@ -142,8 +143,40 @@ export const assistantTurnResponseSchema = z.object({
   transcript: z.string(),
   reply: z.string().min(1),
   actions: z.array(assistantActionCallSchema),
+  droppedActionIds: z.array(z.string()),
+});
+
+export const assistantViaHeader = 'x-tempo-via';
+
+export const assistantDropReasonSchema = z.enum(['unregistered', 'role', 'unavailable', 'invalid-params']);
+
+export const assistantDroppedActionSchema = z.object({
+  id: z.string(),
+  reason: assistantDropReasonSchema,
+});
+
+export const assistantTurnRecordSchema = z.object({
+  id: idSchema,
+  institutionId: idSchema,
+  callerRole: assistantRoleSchema,
+  callerId: idSchema,
+  screenId: idSchema,
+  language: languageSchema,
+  input: z.enum(['audio', 'text']),
+  transcript: z.string(),
+  reply: z.string().min(1),
+  model: z.string().min(1),
+  promptVersion: z.string().min(1),
+  inputRef: z.string().min(1),
+  provider: aiProviderNameSchema,
+  keptActions: z.array(assistantActionCallSchema),
+  droppedActions: z.array(assistantDroppedActionSchema),
+  createdAt: isoDateTimeSchema,
 });
 
 export type AssistantActionCall = z.infer<typeof assistantActionCallSchema>;
 export type AssistantTurnRequest = z.infer<typeof assistantTurnRequestSchema>;
 export type AssistantTurnResponse = z.infer<typeof assistantTurnResponseSchema>;
+export type AssistantDropReason = z.infer<typeof assistantDropReasonSchema>;
+export type AssistantDroppedAction = z.infer<typeof assistantDroppedActionSchema>;
+export type AssistantTurnRecord = z.infer<typeof assistantTurnRecordSchema>;

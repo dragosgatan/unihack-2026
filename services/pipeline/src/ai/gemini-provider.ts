@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { AiPart, AiProvider, AiRequest } from './provider.ts';
+import { functionParameters } from './function-parameters.ts';
+import type { AiFunctionCall, AiPart, AiProvider, AiRequest, AiTask } from './provider.ts';
 
 export const geminiModel = 'gemini-3.8-flash';
 export const geminiFallbackModel = 'gemini-3.5-flash';
@@ -7,6 +8,7 @@ const busyStatuses = new Set([429, 503]);
 export const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 export const geminiApiRevision = '2026-05-20';
 export const geminiTimeoutMs = 60_000;
+export const geminiAssistantTimeoutMs = 12_000;
 
 export class GeminiRequestError extends Error {
   readonly status: number | undefined;
@@ -29,10 +31,18 @@ const mediaType = (mimeType: string): 'image' | 'audio' | 'document' => {
   throw new GeminiRequestError(`Unsupported media type ${mimeType}`);
 };
 
-const toContent = (part: AiPart): GeminiContent =>
-  'text' in part
-    ? { type: 'text', text: part.text }
-    : { type: mediaType(part.mimeType), mime_type: part.mimeType, data: Buffer.from(part.data).toString('base64') };
+const geminiAudioTypes: Record<string, string> = { 'audio/mp4': 'audio/m4a' };
+
+const sentMimeType = (mimeType: string): string => {
+  const bare = mimeType.split(';')[0]?.trim().toLowerCase() ?? mimeType;
+  return geminiAudioTypes[bare] ?? bare;
+};
+
+const toContent = (part: AiPart): GeminiContent => {
+  if ('text' in part) return { type: 'text', text: part.text };
+  const mimeType = sentMimeType(part.mimeType);
+  return { type: mediaType(mimeType), mime_type: mimeType, data: Buffer.from(part.data).toString('base64') };
+};
 
 const unsupportedKeywords = new Set(['$schema', 'pattern']);
 
@@ -46,17 +56,34 @@ const stripUnsupported = (node: unknown): unknown => {
   );
 };
 
-export const geminiRequestBody = ({ system, parts, responseSchema }: AiRequest, model: string = geminiModel) => ({
+const outputFormat = (request: AiRequest) =>
+  'tools' in request
+    ? {
+        tools: request.tools.map(({ name, description, parameters }) => ({
+          type: 'function',
+          name,
+          description,
+          parameters: functionParameters(parameters),
+        })),
+        generation_config: { tool_choice: 'any' },
+      }
+    : {
+        response_format: {
+          type: 'text',
+          mime_type: 'application/json',
+          schema: stripUnsupported(z.toJSONSchema(request.responseSchema)),
+        },
+      };
+
+export const geminiRequestBody = (request: AiRequest, model: string = geminiModel) => ({
   model,
-  system_instruction: system,
-  input: parts.map(toContent),
-  response_format: {
-    type: 'text',
-    mime_type: 'application/json',
-    schema: stripUnsupported(z.toJSONSchema(responseSchema)),
-  },
+  system_instruction: request.system,
+  input: request.parts.map(toContent),
+  ...outputFormat(request),
   store: false,
 });
+
+const timeoutFor = (task: AiTask): number => (task === 'assistant' ? geminiAssistantTimeoutMs : geminiTimeoutMs);
 
 const interactionSchema = z.object({
   model: z.string().min(1).optional(),
@@ -65,6 +92,8 @@ const interactionSchema = z.object({
     z.object({
       type: z.string(),
       content: z.array(z.object({ type: z.string(), text: z.string().optional() })).optional(),
+      name: z.string().optional(),
+      arguments: z.unknown().optional(),
     }),
   ),
 });
@@ -75,6 +104,14 @@ const outputText = (interaction: z.infer<typeof interactionSchema>): string =>
     .flatMap((step) => step.content ?? [])
     .map((content) => (content.type === 'text' ? (content.text ?? '') : ''))
     .join('');
+
+const functionCalls = (interaction: z.infer<typeof interactionSchema>): AiFunctionCall[] =>
+  interaction.steps.flatMap((step) =>
+    step.type === 'function_call' && step.name !== undefined ? [{ name: step.name, arguments: step.arguments ?? {} }] : [],
+  );
+
+const finishedStatuses = (request: AiRequest): ReadonlySet<string> =>
+  new Set('tools' in request ? ['completed', 'requires_action'] : ['completed']);
 
 const parseJson = (text: string): unknown => {
   try {
@@ -102,16 +139,19 @@ export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: Gemin
           'api-revision': geminiApiRevision,
         },
         body: JSON.stringify(geminiRequestBody(request, model)),
-        signal: AbortSignal.timeout(geminiTimeoutMs),
+        signal: AbortSignal.timeout(timeoutFor(request.task)),
       });
     const first = await send(geminiModel);
     const response = busyStatuses.has(first.status) ? await send(geminiFallbackModel) : first;
     if (!response.ok) throw new GeminiRequestError(`Gemini request for ${request.task} failed`, response.status);
     const interaction = interactionSchema.safeParse(await response.json());
     if (!interaction.success) throw new GeminiRequestError(`Gemini response for ${request.task} has an unknown shape`);
-    if (interaction.data.status !== undefined && interaction.data.status !== 'completed') {
-      throw new GeminiRequestError(`Gemini interaction for ${request.task} ended as ${interaction.data.status}`);
+    const { status } = interaction.data;
+    if (status !== undefined && !finishedStatuses(request).has(status)) {
+      throw new GeminiRequestError(`Gemini interaction for ${request.task} ended as ${status}`);
     }
-    return { data: parseJson(outputText(interaction.data)), model: interaction.data.model ?? geminiModel };
+    const model = interaction.data.model ?? geminiModel;
+    if ('tools' in request) return { data: undefined, model, calls: functionCalls(interaction.data) };
+    return { data: parseJson(outputText(interaction.data)), model };
   },
 });
