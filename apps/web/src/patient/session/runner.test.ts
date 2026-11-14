@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { skippedResultSchema, skipStageSchema, type DeviceSessionCodeResponse } from '@tempo/shared';
+import { skippedResultSchema, skipStageSchema, submitSessionRequestSchema, type DeviceSessionCodeResponse } from '@tempo/shared';
 import {
   cannotDo,
   completeActivity,
@@ -106,5 +106,36 @@ describe('session runner', () => {
       partial: false,
       results: [result, { status: 'skipped', activityId: 'trail-making-a', reason: 'tired', stage: 'practice' }],
     });
+  });
+
+  it('submits a full check-in as three valid completed results', () => {
+    const checkIn: DeviceSessionCodeResponse = {
+      ...redeemed,
+      plan: {
+        ...redeemed.plan,
+        items: [
+          { activityId: 'check-in-pain', kind: 'check-in', config: {} },
+          { activityId: 'check-in-medication', kind: 'check-in', config: {} },
+          { activityId: 'check-in-episodes', kind: 'check-in', config: {} },
+        ],
+      },
+    };
+    const answers = [
+      completedResult('check-in-pain', { item: 'pain', intensity: 4, location: 'back', type: 'ache' }, new Date(at)),
+      completedResult(
+        'check-in-medication',
+        { item: 'medication', medications: [{ medicationId: 'med-2', name: 'Levodopa', status: 'taken' }] },
+        new Date(at),
+      ),
+      completedResult('check-in-episodes', { item: 'episodes', episodes: [{ type: 'fall', count: 1 }] }, new Date(at)),
+    ];
+    const done = answers.reduce(completeActivity, startRunner(checkIn));
+    expect(isFinished(done)).toBe(true);
+    const body = submitSessionRequestSchema.parse(submission(done));
+    expect(body.results.map((result) => result.status === 'completed' && result.raw.activityId)).toEqual([
+      'check-in-pain',
+      'check-in-medication',
+      'check-in-episodes',
+    ]);
   });
 });
