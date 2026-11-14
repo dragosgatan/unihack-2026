@@ -56,7 +56,11 @@ const stripUnsupported = (node: unknown): unknown => {
   );
 };
 
-const outputFormat = (request: AiRequest) =>
+// A voice turn has to answer in about a second: gemini-3.5-flash does with minimal thinking, while gemini-3.8-flash took over ten seconds and answered 400 to that thinking level.
+const modelsFor = (task: AiTask): [string, string] =>
+  task === 'assistant' ? [geminiFallbackModel, geminiModel] : [geminiModel, geminiFallbackModel];
+
+const outputFormat = (request: AiRequest, model: string) =>
   'tools' in request
     ? {
         tools: request.tools.map(({ name, description, parameters }) => ({
@@ -65,7 +69,7 @@ const outputFormat = (request: AiRequest) =>
           description,
           parameters: functionParameters(parameters),
         })),
-        generation_config: { tool_choice: 'any' },
+        generation_config: { tool_choice: 'any', ...(model === geminiFallbackModel ? { thinking_level: 'minimal' } : {}) },
       }
     : {
         response_format: {
@@ -79,7 +83,7 @@ export const geminiRequestBody = (request: AiRequest, model: string = geminiMode
   model,
   system_instruction: request.system,
   input: request.parts.map(toContent),
-  ...outputFormat(request),
+  ...outputFormat(request, model),
   store: false,
 });
 
@@ -141,8 +145,9 @@ export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: Gemin
         body: JSON.stringify(geminiRequestBody(request, model)),
         signal: AbortSignal.timeout(timeoutFor(request.task)),
       });
-    const first = await send(geminiModel);
-    const response = busyStatuses.has(first.status) ? await send(geminiFallbackModel) : first;
+    const [preferred, fallback] = modelsFor(request.task);
+    const first = await send(preferred);
+    const response = busyStatuses.has(first.status) ? await send(fallback) : first;
     if (!response.ok) throw new GeminiRequestError(`Gemini request for ${request.task} failed`, response.status);
     const interaction = interactionSchema.safeParse(await response.json());
     if (!interaction.success) throw new GeminiRequestError(`Gemini response for ${request.task} has an unknown shape`);
@@ -150,7 +155,7 @@ export const createGeminiProvider = ({ apiKey, fetch: fetchImpl = fetch }: Gemin
     if (status !== undefined && !finishedStatuses(request).has(status)) {
       throw new GeminiRequestError(`Gemini interaction for ${request.task} ended as ${status}`);
     }
-    const model = interaction.data.model ?? geminiModel;
+    const model = interaction.data.model ?? preferred;
     if ('tools' in request) return { data: undefined, model, calls: functionCalls(interaction.data) };
     return { data: parseJson(outputText(interaction.data)), model };
   },

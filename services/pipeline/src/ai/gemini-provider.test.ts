@@ -193,10 +193,10 @@ describe('Gemini provider with function tools', () => {
     const body = bodyOf(calls[0]);
     expect(body).not.toHaveProperty('response_format');
     expect(body).toMatchObject({
-      model: geminiModel,
+      model: geminiFallbackModel,
       system_instruction: 'assistant prompt',
       store: false,
-      generation_config: { tool_choice: 'any' },
+      generation_config: { tool_choice: 'any', thinking_level: 'minimal' },
       input: [
         { type: 'text', text: 'The user speaks Romanian.' },
         { type: 'audio', mime_type: 'audio/m4a', data: 'Bw==' },
@@ -219,6 +219,15 @@ describe('Gemini provider with function tools', () => {
     ]);
     expect(JSON.stringify(body['tools'])).not.toMatch(/anyOf|oneOf|\$schema|const|additionalProperties/);
     expect(timeout).toHaveBeenCalledWith(geminiAssistantTimeoutMs);
+  });
+
+  it('falls back to the larger model without a thinking level when the fast one is busy', async () => {
+    const responses = [new Response('busy', { status: 429 }), json(callInteraction('requires_action'))];
+    const { fetchImpl, calls } = fakeFetch(() => responses.shift() ?? json({}, 500));
+    await createGeminiProvider({ apiKey: async () => apiKey, fetch: fetchImpl }).generate(toolsRequest);
+
+    expect(calls.map((call) => bodyOf(call)['model'])).toEqual([geminiFallbackModel, geminiModel]);
+    expect(bodyOf(calls[1])['generation_config']).toEqual({ tool_choice: 'any' });
   });
 
   it.each(['completed', 'requires_action'])('reads the function calls of a %s interaction', async (status) => {
