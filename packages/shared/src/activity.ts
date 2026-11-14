@@ -117,6 +117,14 @@ export const clockDrawingRawResultSchema = z.object({
 export type ClockDrawingPoint = z.infer<typeof clockDrawingPointSchema>;
 export type ClockDrawingRawResult = z.infer<typeof clockDrawingRawResultSchema>;
 
+export const spiralTracingRawResultSchema = z.object({
+  hand: sideSchema,
+  sizeMm: z.number().positive(),
+  strokes: z.array(z.array(clockDrawingPointSchema).min(1)),
+});
+
+export type SpiralTracingRawResult = z.infer<typeof spiralTracingRawResultSchema>;
+
 export const medicationCheckInConfigSchema = z.object({
   medications: z.array(z.object({ medicationId: idSchema, name: z.string().min(1) })),
 });
@@ -131,6 +139,7 @@ export const rawResultSchema = z.discriminatedUnion('activityId', [
   rawResultMember('trail-making-a', trailMakingRawResultSchema),
   rawResultMember('trail-making-b', trailMakingRawResultSchema),
   rawResultMember('clock-drawing', clockDrawingRawResultSchema),
+  rawResultMember('spiral-tracing', spiralTracingRawResultSchema),
   rawResultMember('shoulder-raise', shoulderRaiseRawResultSchema),
   rawResultMember('sit-to-stand', sitToStandRawResultSchema),
   rawResultMember('single-leg-squat', singleLegSquatRawResultSchema),

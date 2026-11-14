@@ -7,6 +7,7 @@ import { MedicationCheckIn } from './check-in-medication/MedicationCheckIn.tsx';
 import { PainCheckIn } from './check-in-pain/PainCheckIn.tsx';
 import { ShoulderRaise, SingleLegSquat, SitToStand } from './exercise/exercises.tsx';
 import { FingerTapping } from './finger-tapping/FingerTapping.tsx';
+import { SpiralTracing } from './spiral-tracing/SpiralTracing.tsx';
 import { TrailMakingA, TrailMakingB } from './trail-making/TrailMaking.tsx';
 
 export type RunnerActivityProps<Config, RawResult> = ActivityModuleProps<Config, RawResult> & {
@@ -20,6 +21,7 @@ export const activityModules: Partial<
   'trail-making-a': TrailMakingA,
   'trail-making-b': TrailMakingB,
   'clock-drawing': ClockDrawing,
+  'spiral-tracing': SpiralTracing,
   'shoulder-raise': ShoulderRaise,
   'sit-to-stand': SitToStand,
   'single-leg-squat': SingleLegSquat,
