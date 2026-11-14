@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import { episodeTypeSchema, idSchema, isoDateTimeSchema, routes, submitSessionRequestSchema } from '@tempo/shared';
+import {
+  episodeTypeSchema,
+  idSchema,
+  isoDateTimeSchema,
+  recordingMaxBytes,
+  routes,
+  submitSessionRequestSchema,
+  type UploadRecordingRequest,
+  type WordRecallRecording,
+} from '@tempo/shared';
 import { runnerStateSchema, type RunnerState } from './runner.ts';
 
 const outboxEntrySchema = z.object({
@@ -68,7 +77,6 @@ export async function saveRunner(state: RunnerState) {
   await transactionDone(tx);
 }
 
-// shortcut: recordings stay on the device until an audio upload route exists; sync must upload and then delete them.
 export async function saveRecording(id: string, audio: Blob) {
   const tx = (await database()).transaction('recordings', 'readwrite');
   tx.objectStore('recordings').put(audio, id);
@@ -92,15 +100,59 @@ export async function redeemSessionCode(code: string) {
   return routes.redeemSessionCode.response.parse(await res.json());
 }
 
+const sessionPath = (path: string, sessionId: string) => path.replace(':sessionId', encodeURIComponent(sessionId));
+
+const recordingsOf = (entry: OutboxEntry): WordRecallRecording[] =>
+  entry.body.results.flatMap((result) =>
+    result.status === 'completed' && result.raw.activityId === 'word-recall' ? [result.raw.data.recording] : [],
+  );
+
+const base64 = (audio: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(',') + 1));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(audio);
+  });
+
+async function upload(entry: OutboxEntry, recording: WordRecallRecording) {
+  const audio: unknown = await requestDone((await database()).transaction('recordings').objectStore('recordings').get(recording.id));
+  if (!(audio instanceof Blob) || audio.size === 0 || audio.size > recordingMaxBytes) return;
+  const body: UploadRecordingRequest = { id: recording.id, mimeType: recording.mimeType, data: await base64(audio) };
+  const res = await fetch(sessionPath(routes.uploadRecording.path, entry.sessionId), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${entry.token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Recording ${recording.id} of ${entry.sessionId} not uploaded, status ${res.status}`);
+  routes.uploadRecording.response.parse(await res.json());
+}
+
 async function send(entry: OutboxEntry) {
-  const path = routes.submitSession.path.replace(':sessionId', encodeURIComponent(entry.sessionId));
-  const res = await fetch(path, {
+  for (const recording of recordingsOf(entry)) await upload(entry, recording);
+  const res = await fetch(sessionPath(routes.submitSession.path, entry.sessionId), {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${entry.token}` },
     body: JSON.stringify(entry.body),
   });
   if (!res.ok) throw new Error(`Submit of ${entry.sessionId} failed with ${res.status}`);
   routes.submitSession.response.parse(await res.json());
+}
+
+async function deleteUnreferencedRecordings() {
+  if (await loadRunner()) return;
+  const db = await database();
+  const kept: unknown[] = await requestDone(db.transaction('outbox').objectStore('outbox').getAll());
+  const referenced = new Set(
+    kept.flatMap((item) => {
+      const parsed = outboxEntrySchema.safeParse(item);
+      return parsed.success ? recordingsOf(parsed.data).map((recording) => recording.id) : [];
+    }),
+  );
+  const keys = await requestDone(db.transaction('recordings').objectStore('recordings').getAllKeys());
+  const tx = db.transaction('recordings', 'readwrite');
+  for (const key of keys) if (!referenced.has(String(key))) tx.objectStore('recordings').delete(key);
+  await transactionDone(tx);
 }
 
 export async function syncOutbox() {
@@ -113,13 +165,15 @@ export async function syncOutbox() {
     }
     try {
       await send(parsed.data);
-      const tx = (await database()).transaction('outbox', 'readwrite');
+      const tx = (await database()).transaction(['outbox', 'recordings'], 'readwrite');
       tx.objectStore('outbox').delete(parsed.data.sessionId);
+      for (const recording of recordingsOf(parsed.data)) tx.objectStore('recordings').delete(recording.id);
       await transactionDone(tx);
     } catch (error) {
       console.error(error);
     }
   }
+  await deleteUnreferencedRecordings();
 }
 
 export async function queueEpisode(entry: EpisodeEntry) {
