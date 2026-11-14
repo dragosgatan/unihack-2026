@@ -148,6 +148,55 @@ describe('mock demo session codes', () => {
     expect(Buffer.from(await res.arrayBuffer()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
+  it('runs a home check-in through the pipeline into points, check-ins, episodes and the home screen', async () => {
+    const app = buildTestApp();
+    const { code } = routes.createPairingCode.response.parse(
+      (await call(app, '/api/patients/pat-1/pairing-codes', { method: 'POST' })).body,
+    );
+    const { token } = routes.redeemPairingCode.response.parse(
+      (await call(app, '/api/device/pairing-code', { method: 'POST', body: { code } })).body,
+    );
+    const { session } = routes.startHomeSession.response.parse(
+      (await call(app, '/api/device/sessions', { method: 'POST', token })).body,
+    );
+    const completedAt = '2026-11-13T11:40:00.000Z';
+    const [tapping] = fingerTappingSubmission.results;
+    const results = [
+      { status: 'completed', completedAt, raw: { activityId: 'check-in-pain', data: { item: 'pain', intensity: 5, location: 'back' } } },
+      {
+        status: 'completed',
+        completedAt,
+        raw: {
+          activityId: 'check-in-medication',
+          data: { item: 'medication', medications: [{ medicationId: 'med-2', name: 'Levodopa/Carbidopa', status: 'taken' }] },
+        },
+      },
+      { status: 'completed', completedAt, raw: { activityId: 'check-in-episodes', data: { item: 'episodes', episodes: [{ type: 'freezing', count: 2 }] } } },
+      { ...tapping, completedAt },
+    ];
+    const submitted = await call(app, `/api/sessions/${session.id}/submit`, { method: 'POST', token, body: { partial: false, results } });
+    expect(submitted.body).toEqual({ sessionId: session.id, status: 'submitted' });
+
+    const pointAt = async (metricId: string) =>
+      routes.getMetricSeries.response
+        .parse((await call(app, `/api/patients/pat-1/metrics/${metricId}?range=W`)).body)
+        .points.filter((point) => point.t === completedAt);
+    expect(await pointAt('pain.intensity')).toEqual([{ t: completedAt, value: 5, sessionId: session.id }]);
+    expect(await pointAt('medication.adherence')).toEqual([{ t: completedAt, value: 100, sessionId: session.id }]);
+    expect(await pointAt('episodes.count')).toEqual([{ t: completedAt, value: 2, sessionId: session.id }]);
+
+    const entries = routes.listPatientCheckIns.response.parse((await call(app, '/api/patients/pat-1/check-ins?range=W')).body).entries;
+    expect(entries.filter((entry) => entry.sessionId === session.id)).toHaveLength(3);
+    const episodes = routes.listPatientEpisodes.response.parse((await call(app, '/api/patients/pat-1/episodes?range=W')).body).episodes;
+    expect(episodes[0]).toMatchObject({ type: 'freezing', count: 2, occurredAt: completedAt, source: 'check-in' });
+
+    const home = await call(app, '/api/device/home', { token });
+    const data = routes.getDeviceHome.response.parse(home.body);
+    expect(data.lastSessionAt).toBe(fixedNow.toISOString());
+    expect(data.pain[0]).toEqual({ t: completedAt, intensity: 5 });
+    expect(JSON.stringify(home.body)).not.toMatch(/scores|taps|taps-per-second|adherence/);
+  });
+
   it('never hands out a demo code for a new session', async () => {
     const app = buildTestApp();
     const created = await call(app, '/api/patients/pat-2/sessions', { method: 'POST', body: { mode: 'kiosk' } });

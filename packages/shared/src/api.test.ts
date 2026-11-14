@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   apiErrorSchema,
+  checkInListQuerySchema,
+  checkInListResponseSchema,
   createSessionRequestSchema,
   createPairingCodeResponseSchema,
   createSessionResponseSchema,
+  deviceEpisodeRequestSchema,
+  deviceEpisodeResponseSchema,
   deviceListResponseSchema,
   deviceParamsSchema,
   devicePairingCodeRequestSchema,
   devicePairingCodeResponseSchema,
   deviceSessionCodeRequestSchema,
   deviceSessionCodeResponseSchema,
+  episodeListQuerySchema,
+  episodeListResponseSchema,
   flagListResponseSchema,
+  homeDataSchema,
   meResponseSchema,
   metricSeriesParamsSchema,
   metricSeriesQuerySchema,
@@ -236,6 +243,93 @@ describe('POST /api/device/sessions', () => {
   it('returns the home session with its plan', () => {
     const response = { session: { ...session, mode: 'home', status: 'in-progress' }, plan: sessionPlan };
     expect(startHomeSessionResponseSchema.safeParse(response).success).toBe(true);
+  });
+});
+
+describe('GET /api/device/home', () => {
+  const home = {
+    plan: sessionPlan,
+    lastSessionAt: '2026-11-12T10:30:00.000Z',
+    checkIns: ['2026-11-12T10:02:00.000Z'],
+    pain: [{ t: '2026-11-12T10:02:00.000Z', intensity: 4 }],
+    exercises: [{ t: '2026-11-12T10:20:00.000Z', activityId: 'sit-to-stand', repetitions: 9 }],
+  };
+
+  it('returns the plan and the patient’s own lists', () => {
+    expect(homeDataSchema.safeParse(home).success).toBe(true);
+    expect(homeDataSchema.safeParse({ checkIns: [], pain: [], exercises: [] }).success).toBe(true);
+  });
+
+  it('rejects a pain outside 0 to 10 or negative repetitions', () => {
+    expect(homeDataSchema.safeParse({ ...home, pain: [{ t: home.checkIns[0], intensity: 11 }] }).success).toBe(false);
+    expect(
+      homeDataSchema.safeParse({ ...home, exercises: [{ t: home.checkIns[0], activityId: 'sit-to-stand', repetitions: -1 }] }).success,
+    ).toBe(false);
+  });
+
+  it('drops anything that is not one of its fields, so no scores pass through', () => {
+    const parsed = homeDataSchema.parse({ ...home, scores: [{ metricId: 'trail-making-a.time', value: 50 }] });
+    expect(parsed).not.toHaveProperty('scores');
+  });
+});
+
+describe('POST /api/device/episodes', () => {
+  const body = { id: '5c1f3e0a-6b1d-4c2e-9a77-3f0d2b9e8c41', type: 'freezing', count: 2, occurredAt: '2026-11-13T08:15:00.000Z' };
+
+  it('takes one episode with an optional description', () => {
+    expect(deviceEpisodeRequestSchema.safeParse(body).success).toBe(true);
+    expect(deviceEpisodeRequestSchema.safeParse({ ...body, description: 'At the doorway' }).success).toBe(true);
+  });
+
+  it('rejects a zero count, an unknown type or an empty description', () => {
+    expect(deviceEpisodeRequestSchema.safeParse({ ...body, count: 0 }).success).toBe(false);
+    expect(deviceEpisodeRequestSchema.safeParse({ ...body, type: 'headache' }).success).toBe(false);
+    expect(deviceEpisodeRequestSchema.safeParse({ ...body, description: '' }).success).toBe(false);
+  });
+
+  it('returns the stored episode', () => {
+    const episode = { ...body, patientId: patient.id, source: 'home' };
+    expect(deviceEpisodeResponseSchema.safeParse({ episode }).success).toBe(true);
+    expect(deviceEpisodeResponseSchema.safeParse({ episode: body }).success).toBe(false);
+  });
+});
+
+describe('GET /api/patients/:patientId/check-ins', () => {
+  it('takes an optional range and item', () => {
+    expect(checkInListQuerySchema.safeParse({}).success).toBe(true);
+    expect(checkInListQuerySchema.safeParse({ range: 'M', item: 'medication' }).success).toBe(true);
+    expect(checkInListQuerySchema.safeParse({ item: 'mood' }).success).toBe(false);
+    expect(checkInListQuerySchema.safeParse({ range: '2Y' }).success).toBe(false);
+  });
+
+  it('returns check-in entries', () => {
+    const entry = {
+      id: 'sess-1-r00',
+      patientId: patient.id,
+      sessionId: session.id,
+      recordedAt: '2026-11-13T10:01:00.000Z',
+      recordedBy: { kind: 'patient' },
+      body: { item: 'pain', intensity: 3, location: 'back', type: 'ache' },
+    };
+    expect(checkInListResponseSchema.safeParse({ entries: [entry] }).success).toBe(true);
+  });
+});
+
+describe('GET /api/patients/:patientId/episodes', () => {
+  it('takes an optional range', () => {
+    expect(episodeListQuerySchema.safeParse({}).success).toBe(true);
+    expect(episodeListQuerySchema.safeParse({ range: 'Y' }).success).toBe(true);
+    expect(episodeListQuerySchema.safeParse({ range: 'D' }).success).toBe(false);
+  });
+
+  it('returns episodes from every source', () => {
+    const base = { patientId: patient.id, type: 'fall', count: 1, occurredAt: '2026-11-10T17:00:00.000Z' };
+    const episodes = [
+      { ...base, id: 'ep-1', source: 'home' },
+      { ...base, id: 'ep-2', source: 'check-in' },
+      { ...base, id: 'ep-3', source: 'staff', severity: 'mild' },
+    ];
+    expect(episodeListResponseSchema.safeParse({ episodes }).success).toBe(true);
   });
 });
 

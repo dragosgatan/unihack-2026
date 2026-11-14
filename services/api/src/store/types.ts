@@ -5,6 +5,7 @@ import type {
   AuditEntry,
   Baseline,
   CheckInEntry,
+  Episode,
   Flag,
   Institution,
   MedicalRecord,
@@ -23,6 +24,7 @@ import type {
   Suggestion,
   SuggestionStatus,
 } from '@tempo/shared';
+import type { StoredSkip } from './submission.ts';
 
 export type MetricValue = {
   patientId: string;
@@ -104,6 +106,10 @@ export type Store = {
   listFlags(patientId: string, sessionId: string): Promise<Flag[]>;
   listPatientFlags(patientId: string): Promise<Flag[]>;
   listCheckIns(patientId: string, range: TimeRange): Promise<CheckInEntry[]>;
+  putCheckIns(entries: CheckInEntry[]): Promise<void>;
+  putSkipEvents(patientId: string, skips: StoredSkip[]): Promise<void>;
+  createEpisode(episode: Episode): Promise<Episode>;
+  listEpisodes(patientId: string, range: TimeRange): Promise<Episode[]>;
   putReport(report: SessionReport): Promise<void>;
   getReport(sessionId: string): Promise<SessionReport | undefined>;
   getPublicData(kind: PublicDataKind, query: string): Promise<PublicDataEntry | undefined>;

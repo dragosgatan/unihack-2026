@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 import { createMemoryStore } from '../store/memory.ts';
 import { accessSuite } from './access.ts';
 import { assistantSuite } from './assistant.ts';
+import { checkInsSuite } from './check-ins.ts';
 import { contractSuite } from './contract.ts';
 import { memoryHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
@@ -19,4 +20,5 @@ describe('memory store', () => {
   describe('suggestions', () => suggestionsSuite(memoryHarness));
   describe('assistant', () => assistantSuite(memoryHarness));
   describe('reports', () => reportsSuite(memoryHarness));
+  describe('check-ins', () => checkInsSuite(memoryHarness));
 });

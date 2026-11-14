@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activityResultSchema,
+  bodyRegionSchema,
+  checkInEntrySchema,
+  episodeSchema,
+  flagSchema,
   institutionSchema,
   medicalRecordSchema,
+  metricDefinitions,
   metricIdSchema,
   patientSchema,
   sessionPlanSchema,
@@ -112,6 +118,97 @@ describe('buildSeed', () => {
     const symmetry = valuesOf(aclPatientId, 'single-leg-squat.symmetry');
     expect(mean(symmetry.slice(0, 3))).toBeLessThan(68);
     expect(mean(symmetry.slice(-3))).toBeGreaterThan(86);
+  });
+
+  it('parses the seeded results, flags, check-ins and episodes with their shared schemas', () => {
+    for (const result of seed.results) expect(activityResultSchema.safeParse(result).error).toBeUndefined();
+    for (const flag of seed.flags) expect(flagSchema.safeParse(flag).error).toBeUndefined();
+    for (const entry of seed.checkIns) expect(checkInEntrySchema.safeParse(entry).error).toBeUndefined();
+    for (const episode of seed.episodes) expect(episodeSchema.safeParse(episode).error).toBeUndefined();
+    const ids = (items: { patientId: string; id: string }[]) => items.map((item) => `${item.patientId}|${item.id}`);
+    expect(new Set(ids(seed.checkIns)).size).toBe(seed.checkIns.length);
+    expect(new Set(ids(seed.episodes)).size).toBe(seed.episodes.length);
+  });
+
+  it('gives every patient a pain check-in entry at each pain point, with the same value and a body region', () => {
+    for (const patient of seed.patients) {
+      const points = seed.metricValues.filter((value) => value.patientId === patient.id && value.metricId === 'pain.intensity');
+      const entries = seed.checkIns.filter((entry) => entry.patientId === patient.id && entry.body.item === 'pain');
+      expect(entries.map((entry) => [entry.sessionId, entry.recordedAt, entry.body.item === 'pain' && entry.body.intensity])).toEqual(
+        points.map((value) => [value.sessionId, value.t, value.value]),
+      );
+      for (const entry of entries) {
+        if (entry.body.item !== 'pain' || entry.body.intensity === 0) continue;
+        expect(bodyRegionSchema.safeParse(entry.body.location).success).toBe(true);
+        expect(entry.body.type).toBeDefined();
+      }
+    }
+  });
+
+  it('puts two pain skips in the last month, each with its skipped result, a raised pain and no point for the activity', () => {
+    expect(seed.flags.map((flag) => [flag.patientId, flag.kind])).toEqual([
+      [parkinsonsPatientId, 'pain-skip'],
+      [aclPatientId, 'pain-skip'],
+    ]);
+    for (const flag of seed.flags) {
+      if (flag.kind !== 'pain-skip') throw new Error('Only pain skips are seeded');
+      const session = seed.sessions.find((candidate) => candidate.id === flag.sessionId);
+      const age = fixedNow.getTime() - Date.parse(session?.submittedAt ?? '');
+      expect(age).toBeLessThan(30 * dayMs);
+      expect(age).toBeGreaterThan(7 * dayMs);
+      expect(session?.status).toBe('completed-with-skips');
+      expect(bodyRegionSchema.safeParse(flag.painLocation).success).toBe(true);
+
+      const results = seed.results.filter((result) => result.sessionId === flag.sessionId);
+      expect(results).toMatchObject([
+        { status: 'skipped', activityId: flag.activityId, reason: 'pain', stage: flag.stage, painLocation: flag.painLocation },
+      ]);
+      const inSession = seed.metricValues.filter((value) => value.sessionId === flag.sessionId);
+      expect(inSession.some((value) => metricDefinitions[value.metricId].activityId === flag.activityId)).toBe(false);
+      expect(inSession.find((value) => value.metricId === 'pain.intensity')?.value).toBeGreaterThanOrEqual(5);
+      const pain = seed.checkIns.find((entry) => entry.sessionId === flag.sessionId && entry.body.item === 'pain');
+      expect(pain?.body).toMatchObject({ location: flag.painLocation });
+    }
+  });
+
+  it('gives the Parkinson patient levodopa check-ins that are missed more before the change and taken after it', () => {
+    const change = seed.records
+      .find((record) => record.patientId === parkinsonsPatientId)
+      ?.timeline.find((event) => event.type === 'medication-change')?.t;
+    const entries = seed.checkIns.filter((entry) => entry.patientId === parkinsonsPatientId && entry.body.item === 'medication');
+    const adherence = seed.metricValues.filter((value) => value.patientId === parkinsonsPatientId && value.metricId === 'medication.adherence');
+    expect(entries.map((entry) => entry.recordedAt)).toEqual(adherence.map((value) => value.t));
+
+    const statuses = (from: string, to: string, medicationId: string) =>
+      entries
+        .filter((entry) => entry.recordedAt >= from && entry.recordedAt < to)
+        .flatMap((entry) => (entry.body.item === 'medication' ? entry.body.medications : []))
+        .filter((medication) => medication.medicationId === medicationId)
+        .map((medication) => medication.status);
+    const missedShare = (list: string[]) => list.filter((status) => status === 'missed').length / list.length;
+    const before = statuses('2000-01-01', change ?? '', 'med-1');
+    const after = statuses(change ?? '', '2100-01-01', 'med-2');
+    expect(missedShare(before)).toBeGreaterThan(0.5);
+    expect(missedShare(after)).toBeLessThan(missedShare(before));
+    expect(statuses(change ?? '', '2100-01-01', 'med-1')).toEqual(['stopped']);
+  });
+
+  it('gives the Parkinson patient freezing episodes from home before the fall and the fall from the next check-in', () => {
+    const fall = seed.records
+      .find((record) => record.patientId === parkinsonsPatientId)
+      ?.timeline.find((event) => event.type === 'fall')?.t ?? '';
+    const episodes = seed.episodes.filter((episode) => episode.patientId === parkinsonsPatientId);
+    const homeFreezing = episodes.filter((episode) => episode.source === 'home');
+    expect(homeFreezing.every((episode) => episode.type === 'freezing')).toBe(true);
+    expect(homeFreezing.filter((episode) => episode.occurredAt < fall).length).toBeGreaterThanOrEqual(2);
+
+    const fromCheckIn = episodes.filter((episode) => episode.source === 'check-in');
+    expect(fromCheckIn).toMatchObject([{ type: 'fall', count: 1 }]);
+    const reported = seed.metricValues.filter(
+      (value) => value.patientId === parkinsonsPatientId && value.metricId === 'episodes.count' && value.value > 0,
+    );
+    expect(fromCheckIn.map((episode) => episode.occurredAt)).toEqual(reported.map((value) => value.t));
+    expect((fromCheckIn[0]?.occurredAt ?? '') > fall).toBe(true);
   });
 
   it('gives the Parkinson patient one proposed suggestion whose evidence is in the seed and the bundled label', () => {

@@ -1,4 +1,5 @@
 import type { MedicalRecord, Patient, SessionPlan } from '@tempo/shared';
+import { painEntries, withPainSkip } from './check-ins.ts';
 import { buildHistory, daysBefore, easeOut, isoDate, lerp, type MetricStory, type PatientSeed } from './history.ts';
 import { attending, institution, therapist } from './institution.ts';
 import { mulberry32 } from './random.ts';
@@ -121,5 +122,25 @@ export const buildAclPatient = (now: Date): PatientSeed => {
     stories,
   });
 
-  return { patient, record, plan, ...history };
+  const skipSession = history.sessions.at(-4);
+  if (!skipSession) throw new Error('The ACL seed has too few sessions for its pain skip');
+  const skipped = withPainSkip(history, {
+    session: skipSession,
+    activityId: 'single-leg-squat',
+    stage: 'practice',
+    painLocation: 'right-knee',
+    minimumPain: 5,
+  });
+
+  return {
+    patient,
+    record,
+    plan,
+    sessions: skipped.sessions,
+    metricValues: skipped.metricValues,
+    checkIns: painEntries(skipped.metricValues, 'right-knee', (index) => (index < 8 ? 'sharp' : 'ache')),
+    episodes: [],
+    results: [skipped.result],
+    flags: [skipped.flag],
+  };
 };

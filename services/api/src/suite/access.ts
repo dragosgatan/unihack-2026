@@ -59,6 +59,8 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${parkinson}/suggestions`, { token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/sessions`, { token }), 404, 'not_found');
       expectError(await call(h.app, `${parkinson}/flags`, { token }), 404, 'not_found');
+      expectError(await call(h.app, `${parkinson}/check-ins`, { token }), 404, 'not_found');
+      expectError(await call(h.app, `${parkinson}/episodes`, { token }), 404, 'not_found');
       expect((await call(h.app, `/api/patients/${h.id('pat-2')}`, { token })).status).toBe(200);
     });
 
@@ -80,6 +82,8 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${patient}/suggestions`, { token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/sessions`, { token }), 403, 'forbidden');
       expectError(await call(h.app, `${patient}/flags`, { token }), 403, 'forbidden');
+      expectError(await call(h.app, `${patient}/check-ins`, { token }), 403, 'forbidden');
+      expectError(await call(h.app, `${patient}/episodes`, { token }), 403, 'forbidden');
     });
 
     it('lets every staff role use the lookups, which hold no patient data', async () => {
@@ -110,6 +114,9 @@ export const accessSuite = (factory: HarnessFactory): void => {
       expectError(await call(h.app, `${patient}/sessions`, { method: 'POST', body: '{nope' }), 400, 'invalid_request');
       expectError(await call(h.app, `${patient}/metrics/grip.strength`), 400, 'invalid_request');
       expectError(await call(h.app, `${patient}/metrics/pain.intensity?range=2Y`), 400, 'invalid_request');
+      expectError(await call(h.app, `${patient}/check-ins?range=2Y`), 400, 'invalid_request');
+      expectError(await call(h.app, `${patient}/check-ins?item=sleep`), 400, 'invalid_request');
+      expectError(await call(h.app, `${patient}/episodes?range=2Y`), 400, 'invalid_request');
       expectError(
         await call(h.app, '/api/device/session-code', { method: 'POST', body: { code: '12ab' } }),
         400,

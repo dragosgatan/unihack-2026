@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { AssistantTurnRecord, AuditEntry, Flag, Session, SubmittedResult, Suggestion } from '@tempo/shared';
+import type {
+  AssistantTurnRecord,
+  AuditEntry,
+  CheckInEntry,
+  Episode,
+  Flag,
+  Session,
+  SubmittedResult,
+  Suggestion,
+} from '@tempo/shared';
 import type { Store } from '../store/types.ts';
 
 export type StoreFactory = () => Store;
@@ -269,6 +278,118 @@ export const storeSuite = (factory: StoreFactory): void => {
       ]);
       expect(await store.listCheckIns(patientId, { from: '2026-11-13T10:01:30.000Z', to: day.to })).toEqual(entries.slice(1));
       expect(await store.listCheckIns(unique('pat'), day)).toEqual([]);
+    });
+
+    it('turns each reported episode type of a submitted episodes check-in into one episode, once', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const session = { ...sessionFor(patientId, unique('sess'), '2026-11-13T10:00:00.000Z'), status: 'in-progress' as const };
+      await store.putSession(session);
+      const episodes: SubmittedResult = {
+        status: 'completed',
+        completedAt: '2026-11-13T10:04:00.000Z',
+        raw: {
+          activityId: 'check-in-episodes',
+          data: {
+            item: 'episodes',
+            episodes: [
+              { type: 'freezing', count: 2, description: 'At the doorway' },
+              { type: 'dizziness', count: 0 },
+              { type: 'fall', count: 1 },
+            ],
+          },
+        },
+      };
+      const submission = { partial: false, submittedAt: '2026-11-13T10:10:00.000Z', results: [episodes] };
+      await store.submitSession(session, submission);
+      await store.submitSession(session, submission);
+
+      const day = { from: '2026-11-13T00:00:00.000Z', to: '2026-11-13T23:59:59.999Z' };
+      const base = { patientId, occurredAt: '2026-11-13T10:04:00.000Z', source: 'check-in' as const };
+      expect(await store.listEpisodes(patientId, day)).toEqual([
+        { ...base, id: `${session.id}-r00-e0`, type: 'freezing', count: 2, description: 'At the doorway' },
+        { ...base, id: `${session.id}-r00-e2`, type: 'fall', count: 1 },
+      ]);
+    });
+  });
+
+  describe('episodes', () => {
+    const episodeFor = (patientId: string, id: string, occurredAt: string): Episode => ({
+      id,
+      patientId,
+      type: 'freezing',
+      count: 1,
+      occurredAt,
+      source: 'home',
+    });
+
+    it('creates an episode once per patient and id and hands back the stored one on a repeat', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const episode = episodeFor(patientId, unique('ep'), '2026-11-13T08:00:00.000Z');
+      expect(await store.createEpisode(episode)).toEqual(episode);
+      expect(await store.createEpisode({ ...episode, count: 3 })).toEqual(episode);
+      const [first, second] = await Promise.all([
+        store.createEpisode({ ...episode, count: 4 }),
+        store.createEpisode({ ...episode, count: 5 }),
+      ]);
+      expect([first, second]).toEqual([episode, episode]);
+
+      const other = { ...episode, patientId: unique('pat'), type: 'fall' as const };
+      expect(await store.createEpisode(other)).toEqual(other);
+      const all = { from: '2026-01-01T00:00:00.000Z', to: '2026-12-31T00:00:00.000Z' };
+      expect(await store.listEpisodes(patientId, all)).toEqual([episode]);
+      expect(await store.listEpisodes(other.patientId, all)).toEqual([other]);
+    });
+
+    it('lists a patient’s episodes inside the range, oldest first', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const early = episodeFor(patientId, unique('ep'), '2026-11-01T08:00:00.000Z');
+      const late = episodeFor(patientId, unique('ep'), '2026-11-12T08:00:00.000Z');
+      const outside = episodeFor(patientId, unique('ep'), '2026-09-01T08:00:00.000Z');
+      for (const episode of [late, outside, early]) await store.createEpisode(episode);
+      expect(await store.listEpisodes(patientId, { from: '2026-10-01T00:00:00.000Z', to: '2026-11-13T00:00:00.000Z' })).toEqual([
+        early,
+        late,
+      ]);
+    });
+  });
+
+  describe('seeded check-ins and skips', () => {
+    it('keeps check-in entries and skip events written outside a submission', async () => {
+      const store = factory();
+      const patientId = unique('pat');
+      const sessionId = unique('sess');
+      const entry: CheckInEntry = {
+        id: `${sessionId}-pain`,
+        patientId,
+        sessionId,
+        recordedAt: '2026-11-10T08:25:00.000Z',
+        recordedBy: { kind: 'patient' },
+        body: { item: 'pain', intensity: 4, location: 'back', type: 'ache' },
+      };
+      await store.putCheckIns([entry]);
+      await store.putCheckIns([entry]);
+      const day = { from: '2026-11-10T00:00:00.000Z', to: '2026-11-10T23:59:59.999Z' };
+      expect(await store.listCheckIns(patientId, day)).toEqual([entry]);
+
+      const skip = {
+        activityId: 'sit-to-stand' as const,
+        event: {
+          id: `${sessionId}-r00`,
+          t: '2026-11-10T08:15:00.000Z',
+          type: 'skip' as const,
+          label: 'Skipped because of pain',
+          sessionId,
+          reason: 'pain' as const,
+          stage: 'task' as const,
+        },
+      };
+      await store.putSkipEvents(patientId, [skip]);
+      await store.putSkipEvents(patientId, [skip]);
+      expect(await store.listSkipEvents(patientId, 'sit-to-stand', day)).toEqual([skip.event]);
+      expect(await store.listSkipEvents(patientId, 'shoulder-raise', day)).toEqual([]);
     });
   });
 

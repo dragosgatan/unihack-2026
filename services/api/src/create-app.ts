@@ -8,6 +8,7 @@ import {
   type AssistantRole,
   type AssistantTurnRecord,
   type AuditEntry,
+  type CheckInEntry,
   type Patient,
   type RouteDefinition,
   type Session,
@@ -26,6 +27,7 @@ import {
 } from './auth/device-tokens.ts';
 import type { StaffAuth } from './auth/staff.ts';
 import { planForDevice } from './device-plan.ts';
+import { buildHomeData } from './home.ts';
 import {
   bearerToken,
   errorResponse,
@@ -39,7 +41,8 @@ import {
 import type { PipelineStarter } from './pipeline-starter.ts';
 import type { PublicData } from './public-data/index.ts';
 import type { ReportFileOpener } from './report-files.ts';
-import { buildMetricSeries, listPatientMetrics } from './series.ts';
+import { buildMetricSeries, defaultRange, listPatientMetrics, timeRange } from './series.ts';
+import { byOccurredAt } from './store/submission.ts';
 import { newestFirst } from './store/suggestions.ts';
 import type { CodeEntry, Store } from './store/types.ts';
 
@@ -65,6 +68,9 @@ type AssistantCaller = { role: AssistantRole; id: string; institutionId: string 
 type AuditFields = Pick<AuditEntry, 'action' | 'entityType' | 'entityId' | 'patientId'>;
 
 const firstName = (patient: Patient): string => patient.name.split(' ')[0] ?? patient.name;
+
+const newestCheckInFirst = (a: CheckInEntry, b: CheckInEntry): number =>
+  a.recordedAt < b.recordedAt ? 1 : a.recordedAt > b.recordedAt ? -1 : a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 
 export const createApp = ({
   store,
@@ -280,7 +286,7 @@ export const createApp = ({
     return buildMetricSeries(store, {
       record: requireRecord(detail),
       metricId: params.metricId,
-      range: query.range ?? '6M',
+      range: query.range ?? defaultRange,
       side: query.side,
       now: clock(),
     });
@@ -342,8 +348,12 @@ export const createApp = ({
     return { device: revoked };
   });
 
+  const requirePairedDevice = (device: DeviceClaims, action: string): void => {
+    if (device.scope !== 'patient') throw new HttpError('forbidden', `Only a paired device can ${action}`);
+  };
+
   deviceRoute(routes.startHomeSession, async ({ device }) => {
-    if (device.scope !== 'patient') throw new HttpError('forbidden', 'Only a paired device can start a home session');
+    requirePairedDevice(device, 'start a home session');
     const detail = await store.getPatientDetail(device.pid);
     if (!detail) throw new HttpError('not_found', 'Patient not found');
     if (!detail.plan) throw new HttpError('invalid_request', 'Patient has no session plan');
@@ -355,6 +365,41 @@ export const createApp = ({
     };
     await store.putSession(session);
     return { session, plan: planForDevice(detail.plan, detail.record, now) };
+  });
+
+  deviceRoute(routes.getDeviceHome, async ({ device }) => {
+    requirePairedDevice(device, 'read the home screen');
+    const detail = await store.getPatientDetail(device.pid);
+    if (!detail) throw new HttpError('not_found', 'Patient not found');
+    return buildHomeData(store, detail, clock());
+  });
+
+  deviceRoute(routes.logDeviceEpisode, async ({ device, body }) => {
+    requirePairedDevice(device, 'log an episode');
+    const episode = await store.createEpisode({
+      id: body.id,
+      patientId: device.pid,
+      type: body.type,
+      count: body.count,
+      occurredAt: body.occurredAt,
+      ...(body.description === undefined ? {} : { description: body.description }),
+      source: 'home',
+    });
+    return { episode };
+  });
+
+  staffRoute(routes.listPatientCheckIns, async ({ staff, params, query }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    const entries = await store.listCheckIns(patient.id, timeRange(query.range ?? defaultRange, clock()));
+    return {
+      entries: entries.filter((entry) => query.item === undefined || entry.body.item === query.item).sort(newestCheckInFirst),
+    };
+  });
+
+  staffRoute(routes.listPatientEpisodes, async ({ staff, params, query }) => {
+    const { patient } = await clinicalPatient(store, staff, params.patientId);
+    const episodes = await store.listEpisodes(patient.id, timeRange(query.range ?? defaultRange, clock()));
+    return { episodes: [...episodes].sort(byOccurredAt).reverse() };
   });
 
   staffRoute(routes.lookupMedications, ({ query }) => publicData.searchMedications(query.q));

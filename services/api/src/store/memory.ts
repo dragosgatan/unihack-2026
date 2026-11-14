@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   Baseline,
   CheckInEntry,
+  Episode,
   Flag,
   Institution,
   MedicalRecord,
@@ -19,7 +20,15 @@ import type {
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
 import { keyOfFlag } from './keys.ts';
-import { storedCheckIns, storedResults, storedSkips, type StoredSkip } from './submission.ts';
+import {
+  byOccurredAt,
+  skipsOfResults,
+  storedCheckIns,
+  storedEpisodes,
+  storedResults,
+  storedSkips,
+  type StoredSkip,
+} from './submission.ts';
 import { newestFirst, withDecision } from './suggestions.ts';
 import type { CodeEntry, MetricValue, PublicDataEntry, ReportLink, Store } from './types.ts';
 
@@ -61,6 +70,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
   const skips = new Map<string, StoredSkip[]>();
   const flags = new Map<string, Flag>();
   const checkIns = new Map<string, CheckInEntry>();
+  const episodes = new Map<string, Episode>();
   const reports = new Map<string, SessionReport>();
   const painAlerts = new Set<string>();
   const publicData = new Map<string, PublicDataEntry>();
@@ -80,6 +90,30 @@ export const createMemoryStore = (seed?: Seed): Store => {
     }
   };
 
+  const addSkips = (patientId: string, added: StoredSkip[]): void => {
+    for (const skip of added) {
+      const key = `${patientId}|${skip.activityId}`;
+      const others = (skips.get(key) ?? []).filter((existing) => existing.event.id !== skip.event.id);
+      skips.set(key, [...others, skip].sort((a, b) => byTime(a.event, b.event)));
+    }
+  };
+
+  const addCheckIns = (entries: CheckInEntry[]): void => {
+    for (const entry of entries) checkIns.set(`${entry.patientId}|${entry.id}`, entry);
+  };
+
+  const addEpisode = (episode: Episode): Episode => {
+    const key = `${episode.patientId}|${episode.id}`;
+    const existing = episodes.get(key);
+    if (existing) return existing;
+    episodes.set(key, episode);
+    return episode;
+  };
+
+  const addFlags = (added: Flag[]): void => {
+    for (const flag of added) flags.set(flagId(flag), flag);
+  };
+
   if (seed) {
     institutions.set(seed.institution.id, seed.institution);
     for (const member of seed.staff) staff.set(member.id, member);
@@ -89,6 +123,11 @@ export const createMemoryStore = (seed?: Seed): Store => {
     for (const session of seed.sessions) sessions.set(session.id, session);
     addMetricValues(seed.metricValues);
     for (const suggestion of seed.suggestions) suggestions.set(`${suggestion.patientId}|${suggestion.id}`, suggestion);
+    for (const result of seed.results) results.set(result.sessionId, [...(results.get(result.sessionId) ?? []), result]);
+    for (const result of seed.results) addSkips(result.patientId, skipsOfResults([result]));
+    addCheckIns(seed.checkIns);
+    for (const episode of seed.episodes) addEpisode(episode);
+    addFlags(seed.flags);
   }
 
   return {
@@ -120,12 +159,9 @@ export const createMemoryStore = (seed?: Seed): Store => {
       if (!current) throw new Error(`Session ${session.id} does not exist`);
       if (!isOpen(current)) return current.status;
       results.set(session.id, storedResults(session, submitted));
-      for (const skip of storedSkips(session, submitted)) {
-        const key = `${session.patientId}|${skip.activityId}`;
-        const others = (skips.get(key) ?? []).filter((existing) => existing.event.id !== skip.event.id);
-        skips.set(key, [...others, skip].sort((a, b) => byTime(a.event, b.event)));
-      }
-      for (const entry of storedCheckIns(session, submitted)) checkIns.set(entry.id, entry);
+      addSkips(session.patientId, storedSkips(session, submitted));
+      addCheckIns(storedCheckIns(session, submitted));
+      for (const episode of storedEpisodes(session, submitted)) addEpisode(episode);
       sessions.set(session.id, { ...current, status: 'submitted', partial, submittedAt });
       return 'submitted';
     },
@@ -251,7 +287,7 @@ export const createMemoryStore = (seed?: Seed): Store => {
     },
 
     putFlags: async (newFlags) => {
-      for (const flag of newFlags) flags.set(flagId(flag), flag);
+      addFlags(newFlags);
     },
 
     listFlags: async (patientId, sessionId) =>
@@ -264,6 +300,21 @@ export const createMemoryStore = (seed?: Seed): Store => {
       [...checkIns.values()]
         .filter((entry) => entry.patientId === patientId && entry.recordedAt >= from && entry.recordedAt <= to)
         .sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : a.recordedAt > b.recordedAt ? 1 : a.id < b.id ? -1 : 1)),
+
+    putCheckIns: async (entries) => {
+      addCheckIns(entries);
+    },
+
+    putSkipEvents: async (patientId, added) => {
+      addSkips(patientId, added);
+    },
+
+    createEpisode: async (episode) => addEpisode(episode),
+
+    listEpisodes: async (patientId, { from, to }) =>
+      [...episodes.values()]
+        .filter((episode) => episode.patientId === patientId && episode.occurredAt >= from && episode.occurredAt <= to)
+        .sort(byOccurredAt),
 
     putReport: async (report) => {
       reports.set(report.sessionId, report);

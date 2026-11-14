@@ -18,6 +18,7 @@ import {
   auditEntrySchema,
   baselineSchema,
   checkInEntrySchema,
+  episodeSchema,
   flagSchema,
   institutionSchema,
   isoDateTimeSchema,
@@ -32,6 +33,8 @@ import {
   skipEventSchema,
   staffSchema,
   suggestionSchema,
+  type CheckInEntry,
+  type Episode,
   type MetricPoint,
   type Session,
 } from '@tempo/shared';
@@ -47,6 +50,8 @@ import {
   currentPlanKey,
   deviceKey,
   devicePrefix,
+  episodeKey,
+  episodePrefix,
   flagPrefix,
   institutionKey,
   institutionListIndexKey,
@@ -83,7 +88,7 @@ import {
   suggestionPrefix,
   type Key,
 } from './keys.ts';
-import { storedCheckIns, storedResults, storedSkips } from './submission.ts';
+import { byOccurredAt, storedCheckIns, storedEpisodes, storedResults, storedSkips, type StoredSkip } from './submission.ts';
 import { newestFirst } from './suggestions.ts';
 import type { CodeEntry, MetricValue, PublicDataEntry, ReportLink, Store } from './types.ts';
 
@@ -213,6 +218,18 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
     data: session,
   });
 
+  const checkInItem = (entry: CheckInEntry): Item => ({
+    ...checkInKey(entry.patientId, entry.recordedAt, entry.id),
+    data: entry,
+  });
+
+  const skipItem = (patientId: string, { activityId, event }: StoredSkip): Item => ({
+    ...skipKey(patientId, activityId, event.t, event.sessionId),
+    data: event,
+  });
+
+  const episodeItem = (episode: Episode): Item => ({ ...episodeKey(episode.patientId, episode.id), data: episode });
+
   const getSession = async (sessionId: string): Promise<Session | undefined> => {
     const item = await get(sessionKey(sessionId));
     return item && sessionSchema.parse(dataOf(item));
@@ -271,14 +288,9 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
     submitSession: async (session, { partial, submittedAt, results }) => {
       await writeAll([
         ...storedResults(session, results).map((result, index) => ({ ...resultKey(session.id, index), data: result })),
-        ...storedSkips(session, results).map(({ activityId, event }) => ({
-          ...skipKey(session.patientId, activityId, event.t, session.id),
-          data: event,
-        })),
-        ...storedCheckIns(session, results).map((entry) => ({
-          ...checkInKey(entry.patientId, entry.recordedAt, entry.id),
-          data: entry,
-        })),
+        ...storedSkips(session, results).map((skip) => skipItem(session.patientId, skip)),
+        ...storedCheckIns(session, results).map(checkInItem),
+        ...storedEpisodes(session, results).map(episodeItem),
       ]);
       try {
         await client.send(
@@ -500,6 +512,28 @@ export const createDynamoStore = ({ tableName, client = createDocumentClient() }
       const [low, high] = checkInRange(from, to);
       return (await queryBetween(patientPk(patientId), low, high)).map((item) => checkInEntrySchema.parse(dataOf(item)));
     },
+
+    putCheckIns: (entries) => writeAll(entries.map(checkInItem)),
+
+    putSkipEvents: (patientId, skips) => writeAll(skips.map((skip) => skipItem(patientId, skip))),
+
+    createEpisode: async (episode) => {
+      try {
+        await client.send(
+          new PutCommand({ TableName: tableName, Item: episodeItem(episode), ConditionExpression: 'attribute_not_exists(pk)' }),
+        );
+        return episode;
+      } catch (error) {
+        if (!isConditionFailure(error)) throw error;
+        return episodeSchema.parse(dataOf(await get(episodeKey(episode.patientId, episode.id))));
+      }
+    },
+
+    listEpisodes: async (patientId, { from, to }) =>
+      (await queryPrefix(patientPk(patientId), episodePrefix))
+        .map((item) => episodeSchema.parse(dataOf(item)))
+        .filter((episode) => episode.occurredAt >= from && episode.occurredAt <= to)
+        .sort(byOccurredAt),
 
     putReport: (report) => put({ ...reportKey(report.sessionId), data: report }),
 

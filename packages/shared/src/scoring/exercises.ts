@@ -1,3 +1,4 @@
+import type { RawResult } from '../activity.ts';
 import type { Side } from '../common.ts';
 import type { ShoulderRaiseRawResult, SingleLegSquatRawResult, SitToStandRawResult } from '../exercise.ts';
 import type { MetricId } from '../metrics.ts';
@@ -24,7 +25,19 @@ const score = (metricId: MetricId, value: number, places: number, side?: Side): 
 const firstPerSide = <T extends { side: Side }>(trials: T[]): T[] =>
   trials.filter((trial, index) => trials.findIndex((other) => other.side === trial.side) === index);
 
-export const scoreShoulderRaise = (raw: ShoulderRaiseRawResult): Score[] =>
+export const exerciseRepetitions = (raw: RawResult): number | undefined => {
+  switch (raw.activityId) {
+    case 'shoulder-raise':
+    case 'single-leg-squat':
+      return raw.data.trials.reduce((sum, trial) => sum + trial.reps.length, 0);
+    case 'sit-to-stand':
+      return raw.data.reps.length;
+    default:
+      return undefined;
+  }
+};
+
+export const scoreShoulderRaise =(raw: ShoulderRaiseRawResult): Score[] =>
   firstPerSide(raw.trials).flatMap(({ side, reps }) => [
     score('shoulder-raise.repetitions', reps.length, 0, side),
     ...(reps.length === 0

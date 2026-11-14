@@ -1,4 +1,15 @@
-import type { MedicalRecord, MetricId, Patient, Session, SessionPlan, Side } from '@tempo/shared';
+import type {
+  ActivityResult,
+  CheckInEntry,
+  Episode,
+  Flag,
+  MedicalRecord,
+  MetricId,
+  Patient,
+  Session,
+  SessionPlan,
+  Side,
+} from '@tempo/shared';
 import type { MetricValue } from '../../store/types.ts';
 import { gaussian, type Random } from './random.ts';
 
@@ -37,6 +48,10 @@ export type PatientSeed = {
   plan: SessionPlan;
   sessions: Session[];
   metricValues: MetricValue[];
+  checkIns: CheckInEntry[];
+  episodes: Episode[];
+  results: ActivityResult[];
+  flags: Flag[];
 };
 
 const decimals: Record<MetricId, number> = {

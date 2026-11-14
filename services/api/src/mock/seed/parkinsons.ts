@@ -1,5 +1,7 @@
-import type { MedicalRecord, Patient, SessionPlan, Suggestion } from '@tempo/shared';
+import type { Episode, MedicalRecord, Patient, SessionPlan, Suggestion } from '@tempo/shared';
 import { fallbackLabel } from '../../public-data/fallback.ts';
+import { episodesOfCheckIns } from '../../store/submission.ts';
+import { fallEntries, medicationEntries, painEntries, withPainSkip } from './check-ins.ts';
 import {
   buildHistory,
   daysBefore,
@@ -152,7 +154,58 @@ export const buildParkinsonsPatient = (now: Date): PatientSeed => {
     stories,
   });
 
-  return { patient, record, plan, ...history };
+  const skipSession = history.sessions.at(-4);
+  if (!skipSession) throw new Error('The Parkinson seed has too few sessions for its pain skip');
+  const skipped = withPainSkip(history, {
+    session: skipSession,
+    activityId: 'sit-to-stand',
+    stage: 'task',
+    painLocation: 'back',
+    minimumPain: 5,
+  });
+  const [before, after] = record.medications;
+  if (!before || !after) throw new Error('The Parkinson seed needs the levodopa medications before and after the change');
+
+  const checkIns = [
+    ...painEntries(skipped.metricValues, 'back', () => 'ache'),
+    ...medicationEntries(skipped.metricValues, {
+      before: { medicationId: before.id, name: before.name },
+      after: { medicationId: after.id, name: after.name },
+      at: levodopaChange,
+      takenFrom: 90,
+    }),
+    ...fallEntries(skipped.metricValues, 'Fell at home in the evening, no injury'),
+  ];
+
+  const homeEpisode = (index: number, at: Date, count: number, description: string): Episode => ({
+    id: `ep-${patient.id}-home-${String(index).padStart(2, '0')}`,
+    patientId: patient.id,
+    type: 'freezing',
+    count,
+    occurredAt: at.toISOString(),
+    description,
+    source: 'home',
+  });
+
+  const episodes = [
+    homeEpisode(1, daysBefore(now, 67, 18), 1, 'Feet stuck when turning in the kitchen'),
+    homeEpisode(2, daysBefore(now, 64, 9), 2, 'Froze at the doorway twice in the morning'),
+    homeEpisode(3, daysBefore(now, 61, 19), 1, 'Froze before the stairs'),
+    homeEpisode(4, daysBefore(now, 35, 10), 1, 'Short freeze at the doorway'),
+    ...episodesOfCheckIns(checkIns),
+  ];
+
+  return {
+    patient,
+    record,
+    plan,
+    sessions: skipped.sessions,
+    metricValues: skipped.metricValues,
+    checkIns,
+    episodes,
+    results: [skipped.result],
+    flags: [skipped.flag],
+  };
 };
 
 export const parkinsonsSuggestionTerms = ['confusion', 'somnolence', 'dizziness', 'hallucinations'];

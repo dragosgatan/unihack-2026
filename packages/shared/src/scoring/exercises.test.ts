@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rawResultSchema } from '../activity.ts';
 import type { Side } from '../common.ts';
-import { scoreShoulderRaise, scoreSingleLegSquat, scoreSitToStand } from './exercises.ts';
+import { exerciseRepetitions, scoreShoulderRaise, scoreSingleLegSquat, scoreSitToStand } from './exercises.ts';
 import shoulderRaiseRight from './fixtures/shoulder-raise-right.json' with { type: 'json' };
 import singleLegSquatLeft from './fixtures/single-leg-squat-left.json' with { type: 'json' };
 import singleLegSquatRight from './fixtures/single-leg-squat-right.json' with { type: 'json' };
@@ -175,6 +175,31 @@ describe('exercise scorers', () => {
       'single-leg-squat.knee-angle',
       'single-leg-squat.knee-valgus',
     ]);
+  });
+
+  it('counts repetitions of an exercise across all trials and sides, and none for other activities', () => {
+    const rep = { startMs: 0, endMs: 1000 };
+    const squat = { ...rep, kneeFlexion: 80, depth: 30, valgus: 4 };
+    expect(
+      exerciseRepetitions({
+        activityId: 'shoulder-raise',
+        data: {
+          trials: [
+            { side: 'right', reps: [{ ...rep, angles: [90] }, { ...rep, angles: [100] }] },
+            { side: 'left', reps: [{ ...rep, angles: [120] }] },
+          ],
+        },
+      }),
+    ).toBe(3);
+    expect(
+      exerciseRepetitions({
+        activityId: 'single-leg-squat',
+        data: { trials: [{ side: 'left', reps: [squat, squat] }, { side: 'right', reps: [] }] },
+      }),
+    ).toBe(2);
+    expect(exerciseRepetitions({ activityId: 'sit-to-stand', data: { durationMs: 30000, reps: [rep, rep, rep, rep] } })).toBe(4);
+    expect(exerciseRepetitions({ activityId: 'sit-to-stand', data: { durationMs: 30000, reps: [] } })).toBe(0);
+    expect(exerciseRepetitions({ activityId: 'check-in-pain', data: { item: 'pain', intensity: 2 } })).toBeUndefined();
   });
 
   it('accepts tracked reps in the raw result schema and dispatches them from scoreResult', () => {

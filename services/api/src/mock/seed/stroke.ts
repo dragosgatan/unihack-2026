@@ -1,4 +1,5 @@
 import type { MedicalRecord, Patient, SessionPlan } from '@tempo/shared';
+import { painEntries } from './check-ins.ts';
 import { buildHistory, daysBefore, easeOut, isoDate, lerp, type MetricStory, type PatientSeed } from './history.ts';
 import { attending, institution, therapist } from './institution.ts';
 import { mulberry32 } from './random.ts';
@@ -123,5 +124,14 @@ export const buildStrokePatient = (now: Date): PatientSeed => {
     stories,
   });
 
-  return { patient, record, plan, ...history };
+  return {
+    patient,
+    record,
+    plan,
+    ...history,
+    checkIns: painEntries(history.metricValues, 'right-shoulder', (index) => (index % 4 === 3 ? 'sharp' : 'ache')),
+    episodes: [],
+    results: [],
+    flags: [],
+  };
 };

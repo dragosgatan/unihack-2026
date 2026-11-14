@@ -1,4 +1,16 @@
-import type { Institution, MedicalRecord, Patient, Session, SessionPlan, Staff, Suggestion } from '@tempo/shared';
+import type {
+  ActivityResult,
+  CheckInEntry,
+  Episode,
+  Flag,
+  Institution,
+  MedicalRecord,
+  Patient,
+  Session,
+  SessionPlan,
+  Staff,
+  Suggestion,
+} from '@tempo/shared';
 import { aclPatientId, buildAclPatient } from './acl.ts';
 import type { MetricValue } from '../../store/types.ts';
 import { admin, attending, institution, therapist } from './institution.ts';
@@ -14,6 +26,10 @@ export type Seed = {
   sessions: Session[];
   metricValues: MetricValue[];
   suggestions: Suggestion[];
+  results: ActivityResult[];
+  flags: Flag[];
+  checkIns: CheckInEntry[];
+  episodes: Episode[];
 };
 
 export const demoSessionCodes: ReadonlyMap<string, string> = new Map([
@@ -34,5 +50,9 @@ export const buildSeed = (now: Date): Seed => {
     sessions: patientSeeds.flatMap((seed) => seed.sessions),
     metricValues: patientSeeds.flatMap((seed) => seed.metricValues),
     suggestions: [buildParkinsonsSuggestion(now, parkinsons)],
+    results: patientSeeds.flatMap((seed) => seed.results),
+    flags: patientSeeds.flatMap((seed) => seed.flags),
+    checkIns: patientSeeds.flatMap((seed) => seed.checkIns),
+    episodes: patientSeeds.flatMap((seed) => seed.episodes),
   };
 };

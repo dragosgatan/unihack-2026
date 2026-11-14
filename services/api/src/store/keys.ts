@@ -136,6 +136,12 @@ export const checkInRange = (from: string, to: string): [string, string] => [
   `${checkInPrefix}${to}#￿`,
 ];
 
+export const episodePrefix = 'EPISODE#';
+export const episodeKey = (patientId: string, episodeId: string): Key => ({
+  pk: patientPk(patientId),
+  sk: `${episodePrefix}${episodeId}`,
+});
+
 export const institutionListPk = 'INSTITUTIONS';
 export const institutionListIndexKey = (institutionId: string): IndexKey => ({
   gsi1pk: institutionListPk,

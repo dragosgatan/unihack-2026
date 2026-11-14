@@ -1,4 +1,8 @@
 import {
+  activityResultSchema,
+  checkInEntrySchema,
+  episodeSchema,
+  flagSchema,
   institutionSchema,
   medicalRecordSchema,
   patientSchema,
@@ -8,6 +12,7 @@ import {
   suggestionSchema,
 } from '@tempo/shared';
 import type { Seed } from '../mock/seed/build.ts';
+import { skipsOfResults } from './submission.ts';
 import type { Store } from './types.ts';
 
 const remap = (value: unknown, ids: ReadonlyMap<string, string>): unknown => {
@@ -32,7 +37,17 @@ export const remapSeed = (seed: Seed, ids: ReadonlyMap<string, string>): Seed =>
     sessionId: ids.get(value.sessionId) ?? value.sessionId,
   })),
   suggestions: suggestionSchema.array().parse(remap(seed.suggestions, ids)),
+  results: activityResultSchema.array().parse(remap(seed.results, ids)),
+  flags: flagSchema.array().parse(remap(seed.flags, ids)),
+  checkIns: checkInEntrySchema.array().parse(remap(seed.checkIns, ids)),
+  episodes: episodeSchema.array().parse(remap(seed.episodes, ids)),
 });
+
+const groupBy = <Item>(items: Item[], keyOf: (item: Item) => string): Map<string, Item[]> => {
+  const groups = new Map<string, Item[]>();
+  for (const item of items) groups.set(keyOf(item), [...(groups.get(keyOf(item)) ?? []), item]);
+  return groups;
+};
 
 export const loadSeed = async (store: Store, seed: Seed, ids: ReadonlyMap<string, string> = new Map()): Promise<Seed> => {
   const remapped = remapSeed(seed, ids);
@@ -44,5 +59,14 @@ export const loadSeed = async (store: Store, seed: Seed, ids: ReadonlyMap<string
   for (const session of remapped.sessions) await store.putSession(session);
   await store.putMetricValues(remapped.metricValues);
   for (const suggestion of remapped.suggestions) await store.createSuggestion(suggestion);
+  for (const [sessionId, results] of groupBy(remapped.results, (result) => result.sessionId)) {
+    await store.putResults(sessionId, results);
+  }
+  for (const [patientId, results] of groupBy(remapped.results, (result) => result.patientId)) {
+    await store.putSkipEvents(patientId, skipsOfResults(results));
+  }
+  await store.putFlags(remapped.flags);
+  await store.putCheckIns(remapped.checkIns);
+  for (const episode of remapped.episodes) await store.createEpisode(episode);
   return remapped;
 };

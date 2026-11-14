@@ -57,12 +57,40 @@ describe('loadSeed', () => {
     });
   });
 
+  it('writes the seeded results, skip events, flags, check-ins and episodes', async () => {
+    const store = createMemoryStore();
+    const seed = buildSeed(fixedNow);
+    await loadSeed(store, seed, subs);
+    const all = { from: '2000-01-01T00:00:00.000Z', to: fixedNow.toISOString() };
+
+    for (const result of seed.results) {
+      expect(await store.listResults(result.sessionId)).toEqual([result]);
+      if (result.status !== 'skipped') continue;
+      const events = await store.listSkipEvents(result.patientId, result.activityId, all);
+      expect(events).toMatchObject([{ id: result.id, t: result.skippedAt, sessionId: result.sessionId, reason: 'pain' }]);
+    }
+    for (const patient of seed.patients) {
+      expect(await store.listPatientFlags(patient.id)).toEqual(seed.flags.filter((flag) => flag.patientId === patient.id));
+      const entries = seed.checkIns.filter((entry) => entry.patientId === patient.id);
+      expect(await store.listCheckIns(patient.id, all)).toHaveLength(entries.length);
+      const episodes = seed.episodes.filter((episode) => episode.patientId === patient.id);
+      expect(await store.listEpisodes(patient.id, all)).toEqual([...episodes].sort((a, b) => (a.occurredAt < b.occurredAt ? -1 : 1)));
+    }
+    expect(seed.checkIns.length).toBeGreaterThan(0);
+    expect(seed.episodes.length).toBeGreaterThan(0);
+  });
+
   it('can run twice without duplicating anything', async () => {
     const store = createMemoryStore();
     await loadSeed(store, buildSeed(fixedNow), subs);
     await loadSeed(store, buildSeed(fixedNow), subs);
     expect(await store.listPatients('inst-1')).toHaveLength(3);
     const all = { from: '2000-01-01T00:00:00.000Z', to: fixedNow.toISOString() };
+    const seed = buildSeed(fixedNow);
+    expect(await store.listCheckIns('pat-1', all)).toHaveLength(seed.checkIns.filter((entry) => entry.patientId === 'pat-1').length);
+    expect(await store.listEpisodes('pat-1', all)).toHaveLength(seed.episodes.filter((episode) => episode.patientId === 'pat-1').length);
+    expect(await store.listPatientFlags('pat-3')).toHaveLength(1);
+    for (const result of seed.results) expect(await store.listResults(result.sessionId)).toHaveLength(1);
     const once = buildSeed(fixedNow).metricValues.filter(
       (value) => value.patientId === 'pat-3' && value.metricId === 'pain.intensity',
     );

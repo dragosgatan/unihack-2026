@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { activityIdSchema } from './activity.ts';
 import { assistantTurnRequestSchema, assistantTurnResponseSchema } from './assistant.ts';
+import { checkInEntrySchema, episodeSchema } from './checkin.ts';
 import { idSchema, isoDateTimeSchema, languageSchema, sideSchema } from './common.ts';
 import { pairedDeviceSchema, patientSchema, staffSchema } from './entities.ts';
 import { flagSchema } from './flag.ts';
@@ -154,6 +156,45 @@ export const startHomeSessionResponseSchema = z.object({
   plan: sessionPlanSchema,
 });
 
+export const homeDataSchema = z.object({
+  plan: sessionPlanSchema.optional(),
+  lastSessionAt: isoDateTimeSchema.optional(),
+  checkIns: z.array(isoDateTimeSchema),
+  pain: z.array(z.object({ t: isoDateTimeSchema, intensity: z.number().int().min(0).max(10) })),
+  exercises: z.array(z.object({ t: isoDateTimeSchema, activityId: activityIdSchema, repetitions: z.number().int().nonnegative() })),
+});
+
+export const deviceEpisodeRequestSchema = episodeSchema.pick({
+  id: true,
+  type: true,
+  count: true,
+  occurredAt: true,
+  description: true,
+});
+
+export const deviceEpisodeResponseSchema = z.object({
+  episode: episodeSchema,
+});
+
+export const checkInItemSchema = z.enum(['pain', 'medication', 'episodes']);
+
+export const checkInListQuerySchema = z.object({
+  range: metricRangeSchema.optional(),
+  item: checkInItemSchema.optional(),
+});
+
+export const checkInListResponseSchema = z.object({
+  entries: z.array(checkInEntrySchema),
+});
+
+export const episodeListQuerySchema = z.object({
+  range: metricRangeSchema.optional(),
+});
+
+export const episodeListResponseSchema = z.object({
+  episodes: z.array(episodeSchema),
+});
+
 export const flagListResponseSchema = z.object({
   flags: z.array(flagSchema),
 });
@@ -304,6 +345,35 @@ export const routes = {
     auth: 'device',
     response: startHomeSessionResponseSchema,
   },
+  getDeviceHome: {
+    method: 'GET',
+    path: '/api/device/home',
+    auth: 'device',
+    response: homeDataSchema,
+  },
+  logDeviceEpisode: {
+    method: 'POST',
+    path: '/api/device/episodes',
+    auth: 'device',
+    body: deviceEpisodeRequestSchema,
+    response: deviceEpisodeResponseSchema,
+  },
+  listPatientCheckIns: {
+    method: 'GET',
+    path: '/api/patients/:patientId/check-ins',
+    auth: 'staff',
+    params: patientParamsSchema,
+    query: checkInListQuerySchema,
+    response: checkInListResponseSchema,
+  },
+  listPatientEpisodes: {
+    method: 'GET',
+    path: '/api/patients/:patientId/episodes',
+    auth: 'staff',
+    params: patientParamsSchema,
+    query: episodeListQuerySchema,
+    response: episodeListResponseSchema,
+  },
   lookupMedications: {
     method: 'GET',
     path: '/api/lookup/medications',
@@ -398,6 +468,14 @@ export type SuggestionParams = z.infer<typeof suggestionParamsSchema>;
 export type SuggestionListResponse = z.infer<typeof suggestionListResponseSchema>;
 export type SuggestionDecisionRequest = z.infer<typeof suggestionDecisionRequestSchema>;
 export type SuggestionDecisionResponse = z.infer<typeof suggestionDecisionResponseSchema>;
+export type HomeData = z.infer<typeof homeDataSchema>;
+export type DeviceEpisodeRequest = z.infer<typeof deviceEpisodeRequestSchema>;
+export type DeviceEpisodeResponse = z.infer<typeof deviceEpisodeResponseSchema>;
+export type CheckInItem = z.infer<typeof checkInItemSchema>;
+export type CheckInListQuery = z.infer<typeof checkInListQuerySchema>;
+export type CheckInListResponse = z.infer<typeof checkInListResponseSchema>;
+export type EpisodeListQuery = z.infer<typeof episodeListQuerySchema>;
+export type EpisodeListResponse = z.infer<typeof episodeListResponseSchema>;
 export type FlagListResponse = z.infer<typeof flagListResponseSchema>;
 export type SessionReportResponse = z.infer<typeof sessionReportResponseSchema>;
 export type ReportLinkResponse = z.infer<typeof reportLinkResponseSchema>;

@@ -6,6 +6,8 @@ import {
   codeKey,
   currentPlanKey,
   deviceKey,
+  episodeKey,
+  episodePrefix,
   flagKey,
   flagPrefix,
   institutionKey,
@@ -116,6 +118,13 @@ describe('table keys', () => {
     const [, before] = checkInRange('2026-11-01T00:00:00.000Z', '2026-11-13T09:59:59.999Z');
     expect(key.sk > before).toBe(true);
     expect(checkInKey('pat-1', '2026-11-12T10:00:00.000Z', 'sess-9-r00').sk < key.sk).toBe(true);
+  });
+
+  it('keys an episode by patient and id, so the same id under another patient is a different item', () => {
+    expect(episodeKey('pat-1', 'ep-1')).toEqual({ pk: 'PATIENT#pat-1', sk: 'EPISODE#ep-1' });
+    expect(episodeKey('pat-1', 'ep-1').sk.startsWith(episodePrefix)).toBe(true);
+    expect(episodeKey('pat-2', 'ep-1')).not.toEqual(episodeKey('pat-1', 'ep-1'));
+    expect(episodeKey('pat-1', 'ep-1').sk.startsWith('CHECKIN#')).toBe(false);
   });
 
   it('keeps the pain alert marker under the session', () => {

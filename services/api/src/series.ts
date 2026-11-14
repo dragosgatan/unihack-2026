@@ -12,9 +12,16 @@ import {
   type PatientMetric,
   type Side,
 } from '@tempo/shared';
-import type { Store } from './store/types.ts';
+import type { Store, TimeRange } from './store/types.ts';
 
 const rangeDays: Record<MetricRange, number> = { W: 7, M: 30, '6M': 182, Y: 365 };
+
+export const defaultRange: MetricRange = '6M';
+
+export const timeRange = (range: MetricRange, now: Date): TimeRange => ({
+  from: new Date(now.getTime() - rangeDays[range] * 86_400_000).toISOString(),
+  to: now.toISOString(),
+});
 
 const sideFor = (metricId: MetricId, record: MedicalRecord, requested?: Side): Side | undefined =>
   metricDefinitions[metricId].lateral ? (requested ?? defaultSide(record)) : undefined;
@@ -48,9 +55,8 @@ const baselineOf = async (store: Store, patientId: string, metricId: MetricId, s
 export const buildMetricSeries = async (store: Store, request: SeriesRequest): Promise<MetricSeries> => {
   const { record, metricId, now } = request;
   const patientId = record.patientId;
-  const to = now.toISOString();
-  const from = new Date(now.getTime() - rangeDays[request.range] * 86_400_000).toISOString();
-  const range = { from, to };
+  const range = timeRange(request.range, now);
+  const { from } = range;
   const side = sideFor(metricId, record, request.side);
   const definition = metricDefinitions[metricId];
 

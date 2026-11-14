@@ -95,6 +95,30 @@ export const contractSuite = (factory: HarnessFactory): void => {
       expectValid(routes.revokeDevice, await call(h.app, `${base}/devices/${paired.deviceId}/revoke`, { method: 'POST' }));
     });
 
+    it.each(seedPatientIds)('reads the home screen and logs an episode from a phone paired for %s', async (patientId) => {
+      const { code } = expectValid(
+        routes.createPairingCode,
+        await call(h.app, `/api/patients/${h.id(patientId)}/pairing-codes`, { method: 'POST' }),
+      );
+      const { token } = expectValid(
+        routes.redeemPairingCode,
+        await call(h.app, '/api/device/pairing-code', { method: 'POST', body: { code } }),
+      );
+      const home = expectValid(routes.getDeviceHome, await call(h.app, '/api/device/home', { token }));
+      expect(home.checkIns.length).toBeGreaterThan(0);
+      const episode = { id: crypto.randomUUID(), type: 'dizziness', count: 1, occurredAt: fixedNow.toISOString() };
+      expectValid(routes.logDeviceEpisode, await call(h.app, '/api/device/episodes', { method: 'POST', token, body: episode }));
+    });
+
+    it.each(seedPatientIds)('GET /api/patients/%s/check-ins and /episodes for every range', async (seedId) => {
+      const base = `/api/patients/${h.id(seedId)}`;
+      for (const range of metricRangeSchema.options) {
+        const entries = expectValid(routes.listPatientCheckIns, await call(h.app, `${base}/check-ins?range=${range}`)).entries;
+        if (range !== 'W') expect(entries.length).toBeGreaterThan(0);
+        expectValid(routes.listPatientEpisodes, await call(h.app, `${base}/episodes?range=${range}`));
+      }
+    });
+
     it.each(seedPatientIds)('GET /api/patients/%s/metrics lists metrics with last values', async (patientId) => {
       const metrics = await metricsOf(h.id(patientId));
       expect(metrics.length).toBeGreaterThan(0);

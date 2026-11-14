@@ -2,6 +2,7 @@ import { describe, it, vi } from 'vitest';
 import { createDynamoStore } from '../store/dynamo.ts';
 import { accessSuite } from './access.ts';
 import { assistantSuite } from './assistant.ts';
+import { checkInsSuite } from './check-ins.ts';
 import { contractSuite } from './contract.ts';
 import { dynamoHarness } from './harness.ts';
 import { pairingSuite } from './pairing.ts';
@@ -24,6 +25,7 @@ if (tableName) {
     describe('suggestions', () => suggestionsSuite(harness));
     describe('assistant', () => assistantSuite(harness));
     describe('reports', () => reportsSuite(harness));
+    describe('check-ins', () => checkInsSuite(harness));
   });
 } else {
   describe('DynamoDB store', () => {
